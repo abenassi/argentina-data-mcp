@@ -14,6 +14,7 @@ import { afipCuitLookup } from "./tools/afip_cuit_lookup.js";
 import { indecStats } from "./tools/indec_stats.js";
 import { boletinOficialSearch } from "./tools/boletin_oficial_search.js";
 import { dataHealth } from "./tools/data_health.js";
+import { dolarHistorico } from "./tools/dolar_historico.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3100", 10);
 
@@ -95,6 +96,23 @@ function createServer(): McpServer {
     async (input) => {
       try {
         return jsonResult(await indecStats(input));
+      } catch (error) {
+        return errorResult(error);
+      }
+    }
+  );
+
+  server.tool(
+    "dolar_historico",
+    "Consulta la evolución histórica del dólar en Argentina. Tipos: blue, oficial, mep, ccl, mayorista, cripto, tarjeta. Datos desde 2024. Fuente: Ámbito Financiero.",
+    {
+      tipo: z.string().optional().describe("Tipo de dólar: blue, oficial, mep, ccl, mayorista, cripto, tarjeta (default: blue)"),
+      fecha_desde: z.string().optional().describe("Fecha desde (YYYY-MM-DD). Default: 3 meses atrás"),
+      fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
+    },
+    async (input) => {
+      try {
+        return jsonResult(await dolarHistorico(input));
       } catch (error) {
         return errorResult(error);
       }

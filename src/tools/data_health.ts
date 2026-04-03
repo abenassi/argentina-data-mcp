@@ -14,6 +14,7 @@ export interface DataHealthResult {
 
 const TABLE_COUNTS: Record<string, string> = {
   dolar: "cotizaciones_dolar",
+  dolar_historico: "dolar_historico",
   bcra: "bcra_variables",
   indec: "indec_series",
   infoleg: "infoleg_normas",
