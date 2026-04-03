@@ -1,0 +1,15 @@
+[Unit]
+Description=Argentina Data MCP Server
+After=docker.service argentina-data-collector.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/abenassi/repos/argentina-data-mcp
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+EnvironmentFile=/home/abenassi/repos/argentina-data-mcp/.env
+
+[Install]
+WantedBy=multi-user.target
