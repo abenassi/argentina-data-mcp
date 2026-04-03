@@ -129,12 +129,31 @@ function errorResult(error: unknown) {
   };
 }
 
+// --- _meta: marketplace visibility, pricing, rate limits ---
+
+const defaultRateLimit = {
+  maxRequestsPerMinute: 60,
+  cooldownMs: 1000,
+  maxConcurrency: 5,
+};
+
+function toolMeta(overrides: { executeUsd: string; latencyClass?: string }) {
+  return {
+    surface: "both",
+    queryEligible: true,
+    latencyClass: overrides.latencyClass || "instant",
+    pricing: { executeUsd: overrides.executeUsd },
+    rateLimit: defaultRateLimit,
+  };
+}
+
 // --- Register all tools on a server instance ---
 
 export function registerTools(server: McpServer): void {
   server.registerTool("dolar_cotizaciones", {
     description: "Consulta cotizaciones actuales del dólar en Argentina: oficial, blue, bolsa, CCL, mayorista, cripto, tarjeta. Fuente: DolarAPI.com (Ámbito Financiero).",
     outputSchema: dolarCotizacionesOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
   }, async () => {
     try {
       return structuredResult(await dolarCotizaciones());
@@ -151,6 +170,7 @@ export function registerTools(server: McpServer): void {
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
     outputSchema: bcraTipoCambioOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
   }, async (input) => {
     try {
       return structuredResult(await bcraTipoCambio(input));
@@ -167,6 +187,7 @@ export function registerTools(server: McpServer): void {
       limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
     },
     outputSchema: infolegSearchOutput,
+    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
   }, async (input) => {
     try {
       return structuredResult(await infolegSearch(input));
@@ -181,6 +202,7 @@ export function registerTools(server: McpServer): void {
       cuit: z.string().describe("CUIT o CUIL a consultar (11 dígitos, con o sin guiones)"),
     },
     outputSchema: afipCuitLookupOutput,
+    _meta: toolMeta({ executeUsd: "0.001", latencyClass: "fast" }),
   }, async (input) => {
     try {
       return structuredResult(await afipCuitLookup(input));
@@ -196,6 +218,7 @@ export function registerTools(server: McpServer): void {
       periodo: z.string().optional().describe("Período de inicio (YYYY-MM-DD). Default: último disponible"),
     },
     outputSchema: indecStatsOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
   }, async (input) => {
     try {
       return structuredResult(await indecStats(input));
@@ -212,6 +235,7 @@ export function registerTools(server: McpServer): void {
       fecha: z.string().optional().describe("Fecha (YYYY-MM-DD). Default: hoy"),
     },
     outputSchema: boletinOficialSearchOutput,
+    _meta: toolMeta({ executeUsd: "0.001", latencyClass: "fast" }),
   }, async (input) => {
     try {
       return structuredResult(await boletinOficialSearch(input));
@@ -228,6 +252,7 @@ export function registerTools(server: McpServer): void {
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
     outputSchema: dolarHistoricoOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
   }, async (input) => {
     try {
       return structuredResult(await dolarHistorico(input));
@@ -239,6 +264,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool("data_health", {
     description: "Reporta el estado actual de cada fuente de datos del MCP: si está activa, última actualización, cantidad de registros y errores. Útil para diagnóstico rápido.",
     outputSchema: dataHealthOutput,
+    _meta: toolMeta({ executeUsd: "0.0005" }),
   }, async () => {
     try {
       return structuredResult(await dataHealth());
