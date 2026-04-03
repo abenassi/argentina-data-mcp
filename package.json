@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:http": "node dist/http-server.js",
     "dev": "ts-node src/index.ts",
     "collector": "node dist/collectors/collector-runner.js",
     "import:infoleg": "node dist/collectors/import_infoleg.js",
