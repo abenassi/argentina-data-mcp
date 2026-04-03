@@ -33,15 +33,22 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
   // Try PostgreSQL first
   try {
     const dbResult = await pool.query(
-      `SELECT DISTINCT ON (tipo) tipo, compra, venta, fecha, variacion, fuente
+      `SELECT DISTINCT ON (tipo) tipo, compra, venta, fecha, variacion, fuente, created_at
        FROM cotizaciones_dolar
        WHERE fuente = 'dolarapi'
        ORDER BY tipo, created_at DESC`
     );
     if (dbResult.rows.length > 0) {
-      const maxFecha = dbResult.rows.reduce((max: string, r: any) =>
-        r.fecha > max ? r.fecha.toISOString() : max, "");
-      const ageMinutes = (Date.now() - new Date(maxFecha).getTime()) / 60000;
+      // Use created_at (when collector saved it) for freshness, not fecha (market timestamp)
+      // This way, data from Friday is still "current" on Saturday if collector ran recently
+      const maxCreatedAt = dbResult.rows.reduce((max: Date, r: any) =>
+        r.created_at > max ? r.created_at : max, new Date(0));
+      const collectorAgeMinutes = (Date.now() - maxCreatedAt.getTime()) / 60000;
+
+      // Market data timestamp for display
+      const maxFecha = dbResult.rows.reduce((max: Date, r: any) =>
+        r.fecha > max ? r.fecha : max, new Date(0));
+
       return {
         cotizaciones: dbResult.rows.map((r: any) => ({
           tipo: r.tipo,
@@ -52,8 +59,8 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
           variacion: r.variacion ? Number(r.variacion) : 0,
         })),
         fuente: "postgresql",
-        actualizado_al: maxFecha,
-        freshness: ageMinutes < 30 ? "current" : "stale",
+        actualizado_al: maxFecha.toISOString(),
+        freshness: collectorAgeMinutes < 60 ? "current" : "stale",
       };
     }
   } catch {

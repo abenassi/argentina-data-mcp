@@ -60,6 +60,8 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
     if (dbResult.rows.length > 0) {
       const maxFecha = dbResult.rows[0].fecha;
       const ageHours = (Date.now() - new Date(maxFecha).getTime()) / 3600000;
+      // BCRA data is daily and doesn't update on weekends/holidays
+      // 72 hours covers Friday→Monday and long weekends
       return {
         datos: dbResult.rows.map((r: any) => ({
           fecha: r.fecha.toISOString().split("T")[0],
@@ -68,7 +70,7 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
         })),
         fuente: "postgresql",
         actualizado_al: maxFecha.toISOString().split("T")[0],
-        freshness: ageHours < 24 ? "current" : "stale",
+        freshness: ageHours < 72 ? "current" : "stale",
       };
     }
   } catch {
