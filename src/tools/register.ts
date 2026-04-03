@@ -9,6 +9,7 @@ import { boletinOficialSearch } from "./boletin_oficial_search.js";
 import { dataHealth } from "./data_health.js";
 import { dolarHistorico } from "./dolar_historico.js";
 import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
+import { legislacionTributaria } from "./legislacion_tributaria.js";
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -146,6 +147,16 @@ const listDolarTiposOutput = {
   })).describe("All available dollar types"),
   total: z.number().describe("Total number of dollar types"),
   uso: z.string().describe("Usage instructions for the agent"),
+};
+
+// --- Legislación tributaria output schema ---
+
+const legislacionTributariaOutput = {
+  impuesto: z.string().describe("Tax type: monotributo, ganancias, iva"),
+  vigencia: z.string().describe("Validity period of the data"),
+  norma_fuente: z.string().describe("Source law/regulation"),
+  actualizado_al: z.string().describe("Date of last data update (YYYY-MM-DD)"),
+  datos: z.object({}).passthrough().describe("Structured tax data — schema varies by impuesto type"),
 };
 
 // --- Helper functions ---
@@ -333,5 +344,22 @@ export function registerTools(server: McpServer): void {
     _meta: toolMeta({ executeUsd: "0.0005" }),
   }, async () => {
     return structuredResult(listDolarTipos());
+  });
+
+  // --- Intelligence tools ---
+
+  server.registerTool("legislacion_tributaria", {
+    description: "Consulta datos estructurados de legislación tributaria argentina: monotributo (categorías A-K, cuotas, topes), ganancias (deducciones, escala de alícuotas), IVA (alícuotas). Datos pre-computados y actualizados.",
+    inputSchema: {
+      impuesto: z.string().optional().describe("Impuesto a consultar: monotributo, ganancias, iva (default: monotributo)"),
+    },
+    outputSchema: legislacionTributariaOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
+  }, async (input) => {
+    try {
+      return structuredResult(legislacionTributaria(input));
+    } catch (error) {
+      return errorResult(error);
+    }
   });
 }
