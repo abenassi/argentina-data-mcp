@@ -10,6 +10,7 @@ import { dataHealth } from "./data_health.js";
 import { dolarHistorico } from "./dolar_historico.js";
 import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
 import { legislacionTributaria } from "./legislacion_tributaria.js";
+import { analisisEconomico } from "./analisis_economico.js";
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -157,6 +158,20 @@ const legislacionTributariaOutput = {
   norma_fuente: z.string().describe("Source law/regulation"),
   actualizado_al: z.string().describe("Date of last data update (YYYY-MM-DD)"),
   datos: z.object({}).passthrough().describe("Structured tax data — schema varies by impuesto type"),
+};
+
+// --- Intelligence tool output schema ---
+
+const analisisEconomicoOutput = {
+  analisis: z.string().describe("Analysis type: poder_adquisitivo, brecha_cambiaria"),
+  periodo: z.object({
+    desde: z.string().describe("Start date (YYYY-MM-DD)"),
+    hasta: z.string().describe("End date (YYYY-MM-DD)"),
+  }).describe("Analysis time period"),
+  datos: z.object({}).passthrough().describe("Detailed analysis data with evolution and summary"),
+  conclusion: z.string().describe("Human-readable conclusion in Spanish"),
+  confianza: z.enum(["alta", "media", "baja"]).describe("Confidence level based on data quality"),
+  fuentes: z.array(z.string()).describe("Data sources used for the analysis"),
 };
 
 // --- Helper functions ---
@@ -358,6 +373,22 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(legislacionTributaria(input));
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
+
+  server.registerTool("analisis_economico", {
+    description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación, combina IPC + salarios INDEC), brecha_cambiaria (spread blue/oficial/MEP histórico con tendencia). Devuelve análisis con conclusión, no solo datos crudos.",
+    inputSchema: {
+      analisis: z.string().describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria"),
+      meses: z.number().optional().describe("Cantidad de meses a analizar (default: 12, max: 24)"),
+    },
+    outputSchema: analisisEconomicoOutput,
+    _meta: toolMeta({ executeUsd: "0.003", latencyClass: "fast" }),
+  }, async (input) => {
+    try {
+      return structuredResult(await analisisEconomico(input));
     } catch (error) {
       return errorResult(error);
     }
