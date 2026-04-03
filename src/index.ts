@@ -10,6 +10,7 @@ import { infolegSearch } from "./tools/infoleg_search.js";
 import { afipCuitLookup } from "./tools/afip_cuit_lookup.js";
 import { indecStats } from "./tools/indec_stats.js";
 import { boletinOficialSearch } from "./tools/boletin_oficial_search.js";
+import { dataHealth } from "./tools/data_health.js";
 
 const server = new McpServer({
   name: "argentina-data-mcp",
@@ -125,6 +126,20 @@ server.tool(
   async (input) => {
     try {
       return jsonResult(await boletinOficialSearch(input));
+    } catch (error) {
+      return errorResult(error);
+    }
+  }
+);
+
+// Tool 7: data_health
+server.tool(
+  "data_health",
+  "Reporta el estado actual de cada fuente de datos del MCP: si está activa, última actualización, cantidad de registros y errores. Útil para diagnóstico rápido.",
+  {},
+  async () => {
+    try {
+      return jsonResult(await dataHealth());
     } catch (error) {
       return errorResult(error);
     }

@@ -69,8 +69,17 @@ export async function afipCuitLookup(input: AfipCuitLookupInput): Promise<AfipCu
   }
 
   // Try API (currently known to be down, but kept for when it comes back)
-  const url = `https://afip.tangofactura.com/Rest/GetContribuyenteCompleto?cuit=${cuit}`;
-  const data = await fetchJSON<AfipPersonaResponse>(url);
+  let data: AfipPersonaResponse;
+  try {
+    const url = `https://afip.tangofactura.com/Rest/GetContribuyenteCompleto?cuit=${cuit}`;
+    data = await fetchJSON<AfipPersonaResponse>(url);
+  } catch (apiError) {
+    throw new Error(
+      `La consulta de CUIT no está disponible en este momento. ` +
+      `La API de AFIP/TangoFactura no responde. ` +
+      `No hay datos en cache para el CUIT ${cuit}. Intentá más tarde.`
+    );
+  }
 
   if (!data.persona && data.error) {
     throw new Error(`CUIT ${cuit} no encontrado: ${data.error}`);

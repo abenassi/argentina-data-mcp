@@ -104,23 +104,32 @@ export async function boletinOficialSearch(input: BoletinOficialSearchInput): Pr
     params.set("seccion", input.seccion);
   }
 
-  const url = `https://www.boletinoficial.gob.ar/api/search/normas?${params}`;
-  const data = await fetchJSON<BoletinResponse>(url);
+  try {
+    const url = `https://www.boletinoficial.gob.ar/api/search/normas?${params}`;
+    const data = await fetchJSON<BoletinResponse>(url);
 
-  if (!data.dataList || data.dataList.length === 0) {
-    return { resultados: [], fuente: "api_directa", freshness: "unknown" };
+    if (!data.dataList || data.dataList.length === 0) {
+      return { resultados: [], fuente: "api_directa", freshness: "unknown" };
+    }
+
+    return {
+      resultados: data.dataList.map((item) => ({
+        titulo: item.denominacion || item.tipo || "(sin título)",
+        seccion: item.nombreSeccion || "desconocida",
+        fecha: item.fechaPublicacion || fecha,
+        url: item.url || `https://www.boletinoficial.gob.ar/detalleAviso/${item.id}`,
+      })),
+      fuente: "api_directa",
+      freshness: "current",
+    };
+  } catch {
+    return {
+      resultados: [],
+      fuente: "no_disponible",
+      freshness: "unknown",
+      mensaje: "El Boletín Oficial no está respondiendo en este momento. La API oficial no acepta consultas externas. No hay datos precargados disponibles.",
+    } as any;
   }
-
-  return {
-    resultados: data.dataList.map((item) => ({
-      titulo: item.denominacion || item.tipo || "(sin título)",
-      seccion: item.nombreSeccion || "desconocida",
-      fecha: item.fechaPublicacion || fecha,
-      url: item.url || `https://www.boletinoficial.gob.ar/detalleAviso/${item.id}`,
-    })),
-    fuente: "api_directa",
-    freshness: "current",
-  };
 }
 
 function formatDate(d: Date): string {
