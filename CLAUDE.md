@@ -19,3 +19,10 @@
 - @modelcontextprotocol/sdk para el server MCP
 - vitest para tests
 - APIs públicas argentinas (sin auth)
+
+## Repositorio privado de estrategia
+Existe un repo hermano privado en `~/repos/argentina-data-mcp-private` con estrategia, grant application, y roadmap del proyecto. Al empezar a trabajar en este repo, leer del repo privado:
+- `strategy/ROADMAP.md` — para saber en qué fase estamos y cuáles son las prioridades actuales
+- `grant-application/FORM-ANSWERS.md` (sección "Expected Evidence Fields / Output Schema") — para validar que las tools devuelvan los campos esperados por el grant
+- `grant-application/GRANT-PROCESS.md` (sección "Requisitos técnicos") — para saber qué adaptaciones técnicas hacen falta (outputSchema, structuredContent, @ctxprotocol/sdk)
+- NO leer: EMAIL-HISTORY.md, COMPETITIVE-ANALYSIS.md, PLATFORM-RESEARCH.md (no son relevantes para el desarrollo)
