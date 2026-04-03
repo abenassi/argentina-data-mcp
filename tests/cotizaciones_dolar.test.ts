@@ -35,6 +35,8 @@ describe("dolar_cotizaciones", () => {
     expect(result.cotizaciones[0].compra).toBe(1365.21);
     expect(result.cotizaciones[0].venta).toBe(1415.79);
     expect(result.cotizaciones[1].tipo).toBe("blue");
+    expect(result.cotizaciones[0].spread_vs_oficial).toBe(0);
+    expect(result.cotizaciones[1].spread_vs_oficial).toBeCloseTo(-0.76, 1);
     expect(result.fuente).toBe("api_directa");
     expect(result.freshness).toBe("current");
 

@@ -20,6 +20,7 @@ export interface DolarCotizacion {
   venta: number | null;
   fecha_actualizacion: string;
   variacion: number;
+  spread_vs_oficial: number | null;
 }
 
 export interface DolarCotizacionesResult {
@@ -27,6 +28,20 @@ export interface DolarCotizacionesResult {
   fuente: string;
   actualizado_al: string;
   freshness: "current" | "stale" | "unknown";
+}
+
+function addSpread(cotizaciones: DolarCotizacion[]): DolarCotizacion[] {
+  const oficial = cotizaciones.find((c) => c.tipo === "oficial");
+  const oficialVenta = oficial?.venta;
+  return cotizaciones.map((c) => ({
+    ...c,
+    spread_vs_oficial:
+      c.tipo === "oficial"
+        ? 0
+        : oficialVenta && c.venta
+          ? Math.round(((c.venta - oficialVenta) / oficialVenta) * 10000) / 100
+          : null,
+  }));
 }
 
 export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
@@ -50,14 +65,15 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
         r.fecha > max ? r.fecha : max, new Date(0));
 
       return {
-        cotizaciones: dbResult.rows.map((r: any) => ({
+        cotizaciones: addSpread(dbResult.rows.map((r: any) => ({
           tipo: r.tipo,
           nombre: NOMBRES[r.tipo] || r.tipo,
           compra: r.compra ? Number(r.compra) : null,
           venta: r.venta ? Number(r.venta) : null,
           fecha_actualizacion: r.fecha.toISOString(),
           variacion: r.variacion ? Number(r.variacion) : 0,
-        })),
+          spread_vs_oficial: null,
+        }))),
         fuente: "postgresql",
         actualizado_al: maxFecha.toISOString(),
         freshness: collectorAgeMinutes < 60 ? "current" : "stale",
@@ -71,14 +87,15 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
   const data = await fetchJSON<DolarApiItem[]>("https://dolarapi.com/v1/ambito/dolares");
   const now = new Date().toISOString();
   return {
-    cotizaciones: data.map((item) => ({
+    cotizaciones: addSpread(data.map((item) => ({
       tipo: item.casa,
       nombre: item.nombre,
       compra: item.compra,
       venta: item.venta,
       fecha_actualizacion: item.fechaActualizacion,
       variacion: item.variacion,
-    })),
+      spread_vs_oficial: null,
+    }))),
     fuente: "api_directa",
     actualizado_al: now,
     freshness: "current",

@@ -29,7 +29,7 @@ describe("infoleg_search", () => {
           titulo_sumario: "Acceso a la interrupción voluntaria del embarazo",
           titulo_resumido: null,
           fecha_sancion: new Date("2021-01-14"),
-          rank: 0.5,
+          fts_rank: 0.5,
         },
       ],
       rowCount: 1,

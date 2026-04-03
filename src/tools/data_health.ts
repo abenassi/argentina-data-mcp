@@ -41,6 +41,8 @@ export async function dataHealth(): Promise<DataHealthResult> {
     const fresh = freshnessMap.get(source);
 
     let estado: "healthy" | "degraded" | "down";
+    let smokeError: string | null = null;
+
     if (fresh?.is_healthy && count > 0) {
       estado = "healthy";
     } else if (count > 0) {
@@ -49,13 +51,31 @@ export async function dataHealth(): Promise<DataHealthResult> {
       estado = "down";
     }
 
+    // Smoke test for InfoLeg: verify FTS query actually works
+    if (source === "infoleg" && count > 0) {
+      try {
+        await pool.query(
+          `SELECT id_norma FROM (
+            SELECT id_norma, ts_rank(to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,'')),
+                    plainto_tsquery('spanish', 'ley')) AS fts_rank
+            FROM infoleg_normas
+            WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
+                  @@ plainto_tsquery('spanish', 'ley')
+          ) sub ORDER BY fts_rank DESC LIMIT 1`
+        );
+      } catch (err) {
+        estado = "degraded";
+        smokeError = `FTS search failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
     fuentes.push({
       nombre: source,
       estado,
       ultima_actualizacion: fresh?.last_successful_fetch?.toISOString() || null,
       ultimo_dato: fresh?.last_data_date?.toISOString()?.split("T")[0] || null,
       registros: count,
-      error: fresh?.error_message || null,
+      error: smokeError || fresh?.error_message || null,
     });
   }
 

@@ -35,26 +35,30 @@ export async function infolegSearch(input: InfolegSearchInput): Promise<InfolegS
 
     if (input.tipo) {
       query = `
-        SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion,
-               ts_rank(to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,'')),
-                        plainto_tsquery('spanish', $1)) AS rank
-        FROM infoleg_normas
-        WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
-              @@ plainto_tsquery('spanish', $1)
-          AND LOWER(tipo_norma) = LOWER($3)
-        ORDER BY rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
+        SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion, fts_rank FROM (
+          SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion,
+                 ts_rank(to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,'')),
+                          plainto_tsquery('spanish', $1)) AS fts_rank
+          FROM infoleg_normas
+          WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
+                @@ plainto_tsquery('spanish', $1)
+            AND LOWER(tipo_norma) = LOWER($3)
+        ) sub
+        ORDER BY fts_rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
         LIMIT $2
       `;
       params.push(input.tipo);
     } else {
       query = `
-        SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion,
-               ts_rank(to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,'')),
-                        plainto_tsquery('spanish', $1)) AS rank
-        FROM infoleg_normas
-        WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
-              @@ plainto_tsquery('spanish', $1)
-        ORDER BY rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
+        SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion, fts_rank FROM (
+          SELECT id_norma, numero_norma, tipo_norma, titulo_sumario, titulo_resumido, fecha_sancion,
+                 ts_rank(to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,'')),
+                          plainto_tsquery('spanish', $1)) AS fts_rank
+          FROM infoleg_normas
+          WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
+                @@ plainto_tsquery('spanish', $1)
+        ) sub
+        ORDER BY fts_rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
         LIMIT $2
       `;
     }
