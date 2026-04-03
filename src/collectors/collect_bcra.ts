@@ -14,10 +14,13 @@ const VARIABLES: { id: number; nombre: string }[] = [
   { id: 4, nombre: "dolar_oficial" },
   { id: 5, nombre: "dolar_mayorista" },
   { id: 1, nombre: "reservas" },
-  { id: 6, nombre: "tasa_politica" },
   { id: 7, nombre: "badlar" },
+  { id: 8, nombre: "tm20" },
   { id: 27, nombre: "inflacion_mensual" },
+  { id: 28, nombre: "inflacion_interanual" },
   { id: 15, nombre: "base_monetaria" },
+  { id: 16, nombre: "circulacion_monetaria" },
+  { id: 40, nombre: "icl" },
 ];
 
 export async function collectBcra(): Promise<CollectorResult> {
@@ -56,9 +59,10 @@ export async function collectBcra(): Promise<CollectorResult> {
     }
   }
 
-  // Update freshness
+  // Update freshness — healthy if majority of variables succeeded
   try {
-    const healthy = errors.length === 0;
+    const failedVars = errors.filter((e) => e.startsWith("Error fetching")).length;
+    const healthy = failedVars <= Math.floor(VARIABLES.length / 3); // healthy if <33% failed
     await pool.query(
       `INSERT INTO data_freshness (source_name, last_successful_fetch, last_data_date, is_healthy, error_message, updated_at)
        VALUES ('bcra', NOW(), CURRENT_DATE, $1, $2, NOW())

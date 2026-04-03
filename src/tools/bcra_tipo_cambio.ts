@@ -14,13 +14,16 @@ interface BCRAv4Response {
 
 // Variables más comunes del BCRA
 const VARIABLES_CONOCIDAS: Record<string, number> = {
-  dolar_oficial: 4,
-  dolar_mayorista: 5,
-  reservas: 1,
-  tasa_politica: 6,
-  badlar: 7,
-  inflacion_mensual: 27,
-  base_monetaria: 15,
+  dolar_oficial: 4,       // Tipo de cambio minorista (promedio vendedor)
+  dolar_mayorista: 5,     // Tipo de cambio mayorista de referencia
+  reservas: 1,            // Reservas internacionales
+  badlar: 7,              // Tasa BADLAR bancos privados
+  tm20: 8,                // Tasa TM20 bancos privados
+  inflacion_mensual: 27,  // Variación mensual del IPC
+  inflacion_interanual: 28, // Variación interanual del IPC
+  base_monetaria: 15,     // Base monetaria
+  circulacion_monetaria: 16, // Circulación monetaria
+  icl: 40,                // Índice para Contratos de Locación
 };
 
 export interface BcraTipoCambioInput {

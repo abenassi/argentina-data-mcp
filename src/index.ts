@@ -49,7 +49,7 @@ server.tool(
 // Tool 2: bcra_tipo_cambio
 server.tool(
   "bcra_tipo_cambio",
-  "Consulta cotizaciones del dólar y variables monetarias del BCRA. Variables: dolar_oficial, dolar_mayorista, reservas, tasa_politica, badlar, inflacion_mensual, base_monetaria.",
+  "Consulta cotizaciones del dólar y variables monetarias del BCRA. Variables: dolar_oficial, dolar_mayorista, reservas, badlar, tm20, inflacion_mensual, inflacion_interanual, base_monetaria, circulacion_monetaria, icl.",
   {
     variable: z.string().optional().describe("Variable a consultar (default: dolar_oficial)"),
     fecha_desde: z.string().optional().describe("Fecha desde (YYYY-MM-DD). Default: 7 días atrás"),

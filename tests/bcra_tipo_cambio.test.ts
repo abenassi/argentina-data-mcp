@@ -106,7 +106,8 @@ describe("bcra_tipo_cambio", () => {
   it("soporta todas las variables conocidas", async () => {
     const variables = [
       "dolar_oficial", "dolar_mayorista", "reservas",
-      "tasa_politica", "badlar", "inflacion_mensual", "base_monetaria",
+      "badlar", "tm20", "inflacion_mensual", "inflacion_interanual",
+      "base_monetaria", "circulacion_monetaria", "icl",
     ];
 
     for (const variable of variables) {
