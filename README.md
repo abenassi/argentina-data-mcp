@@ -1,108 +1,138 @@
-# argentina-data-mcp
+# Argentina Data MCP
 
-MCP server exposing real-time Argentine legal and financial data (Infoleg, BCRA, AFIP, INDEC, Boletín Oficial) for AI agents.
+MCP server que expone datos argentinos en tiempo real para agentes de IA: cotizaciones del dólar, variables del BCRA, estadísticas del INDEC, legislación de InfoLeg, y más.
 
-## Tools
+## Conectar desde Claude.ai
 
-| Tool | Description |
-|------|-------------|
-| `bcra_tipo_cambio` | Cotizaciones del dólar y variables monetarias del BCRA |
-| `infoleg_search` | Busca legislación argentina (leyes, decretos, resoluciones) |
-| `afip_cuit_lookup` | Consulta datos públicos de un CUIT/CUIL en AFIP |
-| `indec_stats` | Indicadores estadísticos del INDEC (IPC, EMAE, etc.) |
-| `boletin_oficial_search` | Busca publicaciones en el Boletín Oficial |
+Agregá este MCP server como conector HTTP en tu cuenta de Claude:
 
-## Installation
+**URL**: `https://dimension-gras-announcements-mud.trycloudflare.com/mcp`
+
+> Nota: esta URL es temporal (Cloudflare quick tunnel). Para una URL permanente, se requiere un dominio propio.
+
+## Tools disponibles
+
+| Tool | Descripción | Estado |
+|------|-------------|--------|
+| `dolar_cotizaciones` | Cotizaciones actuales del dólar (oficial, blue, MEP, CCL, cripto, tarjeta, mayorista) | ✅ |
+| `dolar_historico` | Evolución histórica del dólar (7 tipos, desde 2024). Fuente: Ámbito Financiero | ✅ |
+| `bcra_tipo_cambio` | Variables monetarias del BCRA: dólar oficial/mayorista, reservas, BADLAR, inflación, base monetaria, ICL | ✅ |
+| `indec_stats` | Indicadores INDEC: IPC, EMAE, salarios, construcción (ISAC), industria (IPI) | ✅ |
+| `infoleg_search` | Búsqueda de legislación argentina (420K+ leyes, decretos, resoluciones) con full-text search | ✅ |
+| `afip_cuit_lookup` | Consulta de CUIT/CUIL en AFIP (API actualmente caída) | ⚠️ |
+| `boletin_oficial_search` | Búsqueda en el Boletín Oficial (API actualmente bloqueada) | ⚠️ |
+| `data_health` | Estado de salud de todas las fuentes de datos | ✅ |
+
+## Ejemplos de uso
+
+### Cotizaciones del dólar
+> "¿A cuánto está el dólar blue hoy?"
+
+Usa `dolar_cotizaciones` — devuelve las 7 cotizaciones actuales con compra, venta y variación.
+
+### Evolución del dólar blue
+> "Mostrame cómo evolucionó el dólar blue en los últimos 6 meses"
+
+Usa `dolar_historico` con `tipo: "blue"` y `fecha_desde: "2025-10-01"`.
+
+### Variables del BCRA
+> "¿Cuánto crecieron las reservas del BCRA en el último año?"
+
+Usa `bcra_tipo_cambio` con `variable: "reservas"` y `fecha_desde: "2025-04-01"`.
+
+### Inflación
+> "¿Cuál fue la inflación de febrero 2026?"
+
+Usa `indec_stats` con `indicador: "ipc"`.
+
+### Legislación
+> "Buscá leyes sobre monotributo"
+
+Usa `infoleg_search` con `query: "monotributo"`. Los resultados priorizan normativa reciente.
+
+### Diagnóstico
+> "¿Están funcionando todas las fuentes de datos?"
+
+Usa `data_health` — reporta estado, última actualización y registros de cada fuente.
+
+## Instalación local
+
+### Requisitos
+- Node.js 20+
+- PostgreSQL 16 (puede correr en Docker)
+
+### Setup
 
 ```bash
+git clone https://github.com/abenassi/argentina-data-mcp.git
+cd argentina-data-mcp
 npm install
 npm run build
+
+# Levantar PostgreSQL
+docker run -d --name argentina-data-pg --restart unless-stopped \
+  -e POSTGRES_USER=argdata -e POSTGRES_PASSWORD=argdata_dev_2026 \
+  -e POSTGRES_DB=argentina_data -p 5432:5432 \
+  -v argentina-data-pgdata:/var/lib/postgresql/data postgres:16-bookworm
+
+# Crear tablas
+psql -h localhost -U argdata -d argentina_data -f sql/001_create_tables.sql
+
+# Configurar .env
+cp .env.example .env
+
+# Cargar datos iniciales
+npm run collector        # Corre collectors una vez y queda escuchando
+npm run import:infoleg   # Importa 420K+ normas (una sola vez)
+npm run backfill:bcra    # Carga 2+ años de historia BCRA
+npm run backfill:dolar-historico  # Carga 2+ años de cotizaciones históricas
 ```
 
-## Usage
-
-### Run directly
+### Ejecutar
 
 ```bash
-node dist/index.js
+# MCP server (stdio, para Claude Desktop / Claude Code)
+npm start
+
+# MCP server (HTTP, para Claude.ai web/mobile)
+npm run start:http
 ```
 
-### Claude Desktop
-
-Add this to your Claude Desktop config (`claude_desktop_config.json`):
+### Claude Desktop / Claude Code
 
 ```json
 {
   "mcpServers": {
     "argentina-data": {
       "command": "node",
-      "args": ["/absolute/path/to/argentina-data-mcp/dist/index.js"]
+      "args": ["/path/to/argentina-data-mcp/dist/index.js"],
+      "env": {
+        "PGHOST": "localhost",
+        "PGPORT": "5432",
+        "PGUSER": "argdata",
+        "PGPASSWORD": "your_password",
+        "PGDATABASE": "argentina_data"
+      }
     }
   }
 }
 ```
 
-### Run with npx (once published)
+## Fuentes de datos
+
+| Fuente | Datos | Frecuencia |
+|--------|-------|------------|
+| [DolarAPI.com](https://dolarapi.com) | Cotizaciones actuales (7 tipos) | Cada 15 min |
+| [Ámbito Financiero](https://www.ambito.com) | Cotizaciones históricas (7 tipos, 2+ años) | Diario |
+| [BCRA API v4](https://api.bcra.gob.ar) | Variables monetarias (10 variables, 2+ años) | Cada hora |
+| [datos.gob.ar](https://apis.datos.gob.ar/series/) | Series INDEC (IPC, EMAE, salarios, etc.) | Diario |
+| [InfoLeg](https://datos.jus.gob.ar) | Normativa nacional (420K+ normas) | Dump CSV |
+
+## Tests
 
 ```bash
-npx argentina-data-mcp
-```
-
-## Tool Details
-
-### bcra_tipo_cambio
-
-Consulta cotizaciones del dólar y variables monetarias del Banco Central.
-
-```
-variable: "dolar_oficial" | "dolar_mayorista" | "reservas" | "tasa_politica" | "badlar" | "inflacion_mensual" | "base_monetaria"
-fecha_desde: "YYYY-MM-DD" (optional, default: 7 days ago)
-fecha_hasta: "YYYY-MM-DD" (optional, default: today)
-```
-
-### infoleg_search
-
-Busca legislación argentina en la base de InfoLeg.
-
-```
-query: string (required)
-tipo: "ley" | "decreto" | "resolución" (optional)
-limit: number (optional, default: 10, max: 50)
-```
-
-### afip_cuit_lookup
-
-Consulta datos públicos asociados a un CUIT/CUIL.
-
-```
-cuit: string (required, 11 digits with or without dashes)
-```
-
-### indec_stats
-
-Consulta indicadores estadísticos del INDEC.
-
-```
-indicador: "ipc" | "emae" | "ipc_nucleo" | "salarios" | "construccion" | "industria"
-periodo: "YYYY-MM-DD" (optional)
-```
-
-### boletin_oficial_search
-
-Busca publicaciones en el Boletín Oficial.
-
-```
-query: string (required)
-seccion: "primera" | "segunda" | "tercera" (optional)
-fecha: "YYYY-MM-DD" (optional, default: today)
-```
-
-## Development
-
-```bash
-npm install
-npm run build
-npm test
+npm test                 # Unit + integration tests
+npm run test:integration # Solo integration tests (requiere PostgreSQL)
 ```
 
 ## License
