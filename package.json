@@ -13,6 +13,7 @@
     "dev": "ts-node src/index.ts",
     "collector": "node dist/collectors/collector-runner.js",
     "import:infoleg": "node dist/collectors/import_infoleg.js",
+    "backfill:bcra": "node dist/collectors/backfill_bcra.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.config.integration.ts"
