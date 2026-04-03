@@ -42,7 +42,7 @@ export async function infolegSearch(input: InfolegSearchInput): Promise<InfolegS
         WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
               @@ plainto_tsquery('spanish', $1)
           AND LOWER(tipo_norma) = LOWER($3)
-        ORDER BY rank DESC
+        ORDER BY rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
         LIMIT $2
       `;
       params.push(input.tipo);
@@ -54,7 +54,7 @@ export async function infolegSearch(input: InfolegSearchInput): Promise<InfolegS
         FROM infoleg_normas
         WHERE to_tsvector('spanish', COALESCE(titulo_sumario,'') || ' ' || COALESCE(titulo_resumido,'') || ' ' || COALESCE(texto_resumido,''))
               @@ plainto_tsquery('spanish', $1)
-        ORDER BY rank DESC
+        ORDER BY rank * (1.0 + 1.0 / (1.0 + EXTRACT(EPOCH FROM NOW() - COALESCE(fecha_sancion, '1900-01-01'::date)) / 86400.0 / 365.0)) DESC
         LIMIT $2
       `;
     }
