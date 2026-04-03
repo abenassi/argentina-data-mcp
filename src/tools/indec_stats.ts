@@ -1,26 +1,33 @@
 import { fetchJSON } from "../utils/http.js";
+import { pool } from "../db/pool.js";
 
-// INDEC / datos.gob.ar API for Argentine statistics
+// datos.gob.ar Series de Tiempo API
+// Response: { data: [["2026-02-01", 10714.6255], ...], meta: [...] }
 
 interface DatosGobSerieResponse {
-  data: {
-    fecha: string;
-    valor: number;
-  }[];
-  meta?: {
-    frequency: string;
-    title: string;
-  };
+  data: [string, number | null][];
+  count: number;
+  meta: [
+    { frequency: string; start_date: string; end_date: string },
+    {
+      field: {
+        id: string;
+        time_index_end: string;
+        is_updated: string;
+        last_value: string;
+      };
+      [key: string]: unknown;
+    },
+  ];
 }
 
-// Series IDs from datos.gob.ar time series API
 const INDICADORES: Record<string, { serieId: string; descripcion: string }> = {
-  ipc: { serieId: "148.3_INIVELAM_DICI_M_26", descripcion: "Índice de Precios al Consumidor (IPC)" },
+  ipc: { serieId: "148.3_INIVELNAL_DICI_M_26", descripcion: "Índice de Precios al Consumidor (IPC) Nacional" },
   emae: { serieId: "143.3_NO_PR_2004_A_21", descripcion: "Estimador Mensual de Actividad Económica (EMAE)" },
-  ipc_nucleo: { serieId: "148.3_INUCAM_DICI_M_19", descripcion: "IPC Núcleo" },
-  salarios: { serieId: "148.3_ISALam_DICI_M_30", descripcion: "Índice de Salarios" },
-  construccion: { serieId: "11.3_ISAC_0_M_22", descripcion: "Indicador Sintético de Actividad de la Construcción (ISAC)" },
-  industria: { serieId: "143.3_IN_PR_2004_A_21", descripcion: "Índice de Producción Industrial (IPI)" },
+  ipc_nucleo: { serieId: "148.3_INUCLEONAL_DICI_M_19", descripcion: "IPC Núcleo Nacional" },
+  salarios: { serieId: "149.1_TL_INDIIOS_OCTU_0_21", descripcion: "Índice de Salarios" },
+  construccion: { serieId: "33.2_ISAC_NIVELRAL_0_M_18_63", descripcion: "Indicador Sintético de Actividad de la Construcción (ISAC)" },
+  industria: { serieId: "453.1_SERIE_ORIGNAL_0_0_14_46", descripcion: "Índice de Producción Industrial (IPI)" },
 };
 
 export interface IndecStatsInput {
@@ -34,6 +41,10 @@ export interface IndecStatsResult {
   valor: number;
   periodo: string;
   variacion?: number;
+  actualizado_al: string;
+  is_updated: boolean;
+  fuente: string;
+  freshness: "current" | "stale" | "unknown";
 }
 
 export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResult> {
@@ -44,20 +55,51 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
     const disponibles = Object.entries(INDICADORES)
       .map(([k, v]) => `${k}: ${v.descripcion}`)
       .join("\n  ");
-    throw new Error(
-      `Indicador "${input.indicador}" no reconocido. Disponibles:\n  ${disponibles}`
-    );
+    throw new Error(`Indicador "${input.indicador}" no reconocido. Disponibles:\n  ${disponibles}`);
   }
 
+  // Try PostgreSQL first
+  try {
+    const dbResult = await pool.query(
+      `SELECT valor, fecha, is_updated, metadata FROM indec_series
+       WHERE serie_id = $1
+       ORDER BY fecha DESC LIMIT 2`,
+      [indicador.serieId]
+    );
+    if (dbResult.rows.length > 0) {
+      const latest = dbResult.rows[0];
+      const previous = dbResult.rows.length > 1 ? dbResult.rows[1] : null;
+      const variacion = previous && Number(previous.valor) !== 0
+        ? ((Number(latest.valor) - Number(previous.valor)) / Number(previous.valor)) * 100
+        : undefined;
+      const fechaStr = latest.fecha.toISOString().split("T")[0];
+      const ageMonths = (Date.now() - new Date(fechaStr).getTime()) / (30 * 24 * 3600000);
+      return {
+        indicador: indicadorKey,
+        descripcion: indicador.descripcion,
+        valor: Number(latest.valor),
+        periodo: fechaStr,
+        variacion: variacion !== undefined ? Math.round(variacion * 100) / 100 : undefined,
+        actualizado_al: fechaStr,
+        is_updated: latest.is_updated,
+        fuente: "postgresql",
+        freshness: ageMonths < 3 ? "current" : "stale",
+      };
+    }
+  } catch {
+    // DB not available, fall through to API
+  }
+
+  // Fallback: direct API call
   const params = new URLSearchParams({
     ids: indicador.serieId,
     limit: "2",
     sort: "desc",
+    metadata: "full",
   });
 
   if (input.periodo) {
     params.set("start_date", input.periodo);
-    params.set("limit", "2");
   }
 
   const url = `https://apis.datos.gob.ar/series/api/series/?${params}`;
@@ -67,18 +109,35 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
     throw new Error(`No hay datos disponibles para ${indicador.descripcion}`);
   }
 
+  // data is array of arrays: [["2026-02-01", 10714.6255], ...]
   const latest = data.data[0];
   const previous = data.data.length > 1 ? data.data[1] : null;
 
-  const variacion = previous && previous.valor !== 0
-    ? ((latest.valor - previous.valor) / previous.valor) * 100
+  const latestValor = latest[1];
+  const previousValor = previous ? previous[1] : null;
+
+  if (latestValor === null) {
+    throw new Error(`Valor nulo para ${indicador.descripcion}`);
+  }
+
+  const variacion = previousValor !== null && previousValor !== 0
+    ? ((latestValor - previousValor) / previousValor) * 100
     : undefined;
+
+  // Extract freshness from metadata
+  const fieldMeta = data.meta && data.meta.length > 1 ? data.meta[1].field : null;
+  const timeIndexEnd = fieldMeta?.time_index_end || latest[0];
+  const isUpdated = fieldMeta?.is_updated !== "False";
 
   return {
     indicador: indicadorKey,
     descripcion: indicador.descripcion,
-    valor: latest.valor,
-    periodo: latest.fecha,
+    valor: latestValor,
+    periodo: latest[0],
     variacion: variacion !== undefined ? Math.round(variacion * 100) / 100 : undefined,
+    actualizado_al: timeIndexEnd,
+    is_updated: isUpdated,
+    fuente: "api_directa",
+    freshness: isUpdated ? "current" : "stale",
   };
 }

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the db pool before importing the tool
+vi.mock("../src/db/pool.js", () => ({
+  pool: { query: vi.fn().mockRejectedValue(new Error("no db in test")) },
+}));
+
 import { bcraTipoCambio } from "../src/tools/bcra_tipo_cambio.js";
 
-// Mock global fetch
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
@@ -19,42 +24,39 @@ beforeEach(() => {
 });
 
 describe("bcra_tipo_cambio", () => {
-  it("obtiene dólar oficial de los últimos 7 días", async () => {
+  it("obtiene dólar oficial de los últimos 7 días (BCRA v4)", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse({
-        results: [
+        status: 200,
+        results: [{ idVariable: 4, detalle: [
           { fecha: "2025-03-28", valor: 1075.5 },
           { fecha: "2025-03-27", valor: 1074.0 },
-        ],
+        ]}],
       })
     );
 
-    const results = await bcraTipoCambio({});
-    expect(results).toHaveLength(2);
-    expect(results[0]).toEqual({
-      fecha: "2025-03-28",
-      valor: 1075.5,
-      variable: "dolar_oficial",
-    });
-    expect(results[1].variable).toBe("dolar_oficial");
+    const result = await bcraTipoCambio({});
+    expect(result.datos).toHaveLength(2);
+    expect(result.datos[0]).toMatchObject({ fecha: "2025-03-28", valor: 1075.5, variable: "dolar_oficial" });
+    expect(result.fuente).toBe("api_directa");
 
-    // Verify correct URL was called
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("api.bcra.gob.ar");
-    expect(calledUrl).toContain("/Monetarias/4");
+    expect(calledUrl).toContain("v4.0/Monetarias/4");
   });
 
   it("obtiene dólar mayorista", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse({
-        results: [{ fecha: "2025-03-28", valor: 1055.0 }],
+        status: 200,
+        results: [{ idVariable: 5, detalle: [{ fecha: "2025-03-28", valor: 1055.0 }] }],
       })
     );
 
-    const results = await bcraTipoCambio({ variable: "dolar_mayorista" });
-    expect(results).toHaveLength(1);
-    expect(results[0].variable).toBe("dolar_mayorista");
-    expect(results[0].valor).toBe(1055.0);
+    const result = await bcraTipoCambio({ variable: "dolar_mayorista" });
+    expect(result.datos).toHaveLength(1);
+    expect(result.datos[0].variable).toBe("dolar_mayorista");
+    expect(result.datos[0].valor).toBe(1055.0);
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("/Monetarias/5");
@@ -63,19 +65,20 @@ describe("bcra_tipo_cambio", () => {
   it("consulta con rango de fechas específico", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse({
-        results: [
+        status: 200,
+        results: [{ idVariable: 4, detalle: [
           { fecha: "2025-01-02", valor: 1050.0 },
           { fecha: "2025-01-03", valor: 1051.0 },
-        ],
+        ]}],
       })
     );
 
-    const results = await bcraTipoCambio({
+    const result = await bcraTipoCambio({
       variable: "dolar_oficial",
       fecha_desde: "2025-01-02",
       fecha_hasta: "2025-01-10",
     });
-    expect(results).toHaveLength(2);
+    expect(result.datos).toHaveLength(2);
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("desde=2025-01-02");
@@ -83,25 +86,20 @@ describe("bcra_tipo_cambio", () => {
   });
 
   it("lanza error con variable desconocida", async () => {
-    await expect(
-      bcraTipoCambio({ variable: "bitcoin" })
-    ).rejects.toThrow("no reconocida");
+    await expect(bcraTipoCambio({ variable: "bitcoin" })).rejects.toThrow("no reconocida");
   });
 
-  it("retorna array vacío si no hay resultados", async () => {
+  it("retorna datos vacíos si no hay resultados", async () => {
     mockFetch.mockResolvedValueOnce(
-      mockResponse({ results: [] })
+      mockResponse({ status: 200, results: [] })
     );
 
-    const results = await bcraTipoCambio({});
-    expect(results).toEqual([]);
+    const result = await bcraTipoCambio({});
+    expect(result.datos).toEqual([]);
   });
 
   it("lanza error en respuesta HTTP no exitosa", async () => {
-    mockFetch.mockResolvedValueOnce(
-      mockResponse({}, 500)
-    );
-
+    mockFetch.mockResolvedValueOnce(mockResponse({}, 500));
     await expect(bcraTipoCambio({})).rejects.toThrow("HTTP 500");
   });
 
@@ -113,10 +111,13 @@ describe("bcra_tipo_cambio", () => {
 
     for (const variable of variables) {
       mockFetch.mockResolvedValueOnce(
-        mockResponse({ results: [{ fecha: "2025-03-28", valor: 100 }] })
+        mockResponse({
+          status: 200,
+          results: [{ idVariable: 1, detalle: [{ fecha: "2025-03-28", valor: 100 }] }],
+        })
       );
-      const results = await bcraTipoCambio({ variable });
-      expect(results[0].variable).toBe(variable);
+      const result = await bcraTipoCambio({ variable });
+      expect(result.datos[0].variable).toBe(variable);
     }
   });
 });

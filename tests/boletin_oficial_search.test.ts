@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("../src/db/pool.js", () => ({
+  pool: { query: vi.fn().mockRejectedValue(new Error("no db in test")) },
+}));
+
 import { boletinOficialSearch } from "../src/tools/boletin_oficial_search.js";
 
 const mockFetch = vi.fn();
@@ -30,11 +35,12 @@ describe("boletin_oficial_search", () => {
       })
     );
 
-    const results = await boletinOficialSearch({ query: "importaciones" });
-    expect(results).toHaveLength(1);
-    expect(results[0].titulo).toContain("importaciones");
-    expect(results[0].seccion).toBe("Primera Sección");
-    expect(results[0].url).toContain("abc123");
+    const result = await boletinOficialSearch({ query: "importaciones" });
+    expect(result.resultados).toHaveLength(1);
+    expect(result.resultados[0].titulo).toContain("importaciones");
+    expect(result.resultados[0].seccion).toBe("Primera Sección");
+    expect(result.resultados[0].url).toContain("abc123");
+    expect(result.fuente).toBe("api_directa");
   });
 
   it("filtra por sección", async () => {
@@ -55,9 +61,9 @@ describe("boletin_oficial_search", () => {
     ).rejects.toThrow("no válida");
   });
 
-  it("retorna array vacío si no hay resultados", async () => {
+  it("retorna resultados vacíos si no hay datos", async () => {
     mockFetch.mockResolvedValueOnce(mockResponse({ dataList: [] }));
-    const results = await boletinOficialSearch({ query: "zzzznoexiste" });
-    expect(results).toEqual([]);
+    const result = await boletinOficialSearch({ query: "zzzznoexiste" });
+    expect(result.resultados).toEqual([]);
   });
 });

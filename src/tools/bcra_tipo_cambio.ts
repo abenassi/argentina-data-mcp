@@ -1,31 +1,26 @@
 import { fetchJSON } from "../utils/http.js";
+import { pool } from "../db/pool.js";
 
-// BCRA API: https://api.bcra.gob.ar/
-// Principales variables: https://api.bcra.gob.ar/estadisticas/v3.0/Monetarias
+// BCRA API v4.0: https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias
 
-interface BCRADatoResponse {
-  results: {
-    fecha: string;
-    valor: number;
-  }[];
-}
-
-interface BCRAVariablesResponse {
+interface BCRAv4Response {
+  status: number;
+  metadata: { resultset: { count: number; offset: number; limit: number } };
   results: {
     idVariable: number;
-    descripcion: string;
+    detalle: { fecha: string; valor: number }[];
   }[];
 }
 
 // Variables más comunes del BCRA
 const VARIABLES_CONOCIDAS: Record<string, number> = {
-  "dolar_oficial": 4,       // Tipo de cambio minorista ($ por USD) - Comunicación B 9791
-  "dolar_mayorista": 5,     // Tipo de cambio mayorista ($ por USD)
-  "reservas": 1,            // Reservas internacionales del BCRA
-  "tasa_politica": 6,       // Tasa de política monetaria
-  "badlar": 7,              // BADLAR en pesos de bancos privados
-  "inflacion_mensual": 27,  // Inflación mensual (CER)
-  "base_monetaria": 15,     // Base monetaria
+  dolar_oficial: 4,
+  dolar_mayorista: 5,
+  reservas: 1,
+  tasa_politica: 6,
+  badlar: 7,
+  inflacion_mensual: 27,
+  base_monetaria: 15,
 };
 
 export interface BcraTipoCambioInput {
@@ -35,44 +30,75 @@ export interface BcraTipoCambioInput {
 }
 
 export interface BcraTipoCambioResult {
-  fecha: string;
-  valor: number;
-  variable: string;
+  datos: { fecha: string; valor: number; variable: string }[];
+  fuente: string;
+  actualizado_al: string;
+  freshness: "current" | "stale" | "unknown";
 }
 
-export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTipoCambioResult[]> {
+export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTipoCambioResult> {
   const variableName = input.variable || "dolar_oficial";
   const idVariable = VARIABLES_CONOCIDAS[variableName];
 
   if (!idVariable) {
     const disponibles = Object.keys(VARIABLES_CONOCIDAS).join(", ");
-    throw new Error(
-      `Variable "${variableName}" no reconocida. Disponibles: ${disponibles}`
-    );
+    throw new Error(`Variable "${variableName}" no reconocida. Disponibles: ${disponibles}`);
   }
 
   const hoy = new Date();
   const fechaHasta = input.fecha_hasta || formatDate(hoy);
   const fechaDesde = input.fecha_desde || formatDate(daysAgo(hoy, 7));
 
-  const url = `https://api.bcra.gob.ar/estadisticas/v3.0/Monetarias/${idVariable}?desde=${fechaDesde}&hasta=${fechaHasta}`;
-
-  const data = await fetchJSON<BCRADatoResponse>(url);
-
-  if (!data.results || data.results.length === 0) {
-    return [];
+  // Try PostgreSQL first
+  try {
+    const dbResult = await pool.query(
+      `SELECT nombre, valor, fecha FROM bcra_variables
+       WHERE id_variable = $1 AND fecha >= $2 AND fecha <= $3
+       ORDER BY fecha DESC`,
+      [idVariable, fechaDesde, fechaHasta]
+    );
+    if (dbResult.rows.length > 0) {
+      const maxFecha = dbResult.rows[0].fecha;
+      const ageHours = (Date.now() - new Date(maxFecha).getTime()) / 3600000;
+      return {
+        datos: dbResult.rows.map((r: any) => ({
+          fecha: r.fecha.toISOString().split("T")[0],
+          valor: Number(r.valor),
+          variable: variableName,
+        })),
+        fuente: "postgresql",
+        actualizado_al: maxFecha.toISOString().split("T")[0],
+        freshness: ageHours < 24 ? "current" : "stale",
+      };
+    }
+  } catch {
+    // DB not available, fall through to API
   }
 
-  return data.results.map((r) => ({
-    fecha: r.fecha,
-    valor: r.valor,
-    variable: variableName,
-  }));
+  // Fallback: direct API call (BCRA v4.0)
+  const url = `https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/${idVariable}?desde=${fechaDesde}&hasta=${fechaHasta}`;
+  const data = await fetchJSON<BCRAv4Response>(url);
+
+  if (!data.results || data.results.length === 0 || !data.results[0].detalle || data.results[0].detalle.length === 0) {
+    return { datos: [], fuente: "api_directa", actualizado_al: fechaHasta, freshness: "unknown" };
+  }
+
+  const detalle = data.results[0].detalle;
+  return {
+    datos: detalle.map((r) => ({
+      fecha: r.fecha,
+      valor: r.valor,
+      variable: variableName,
+    })),
+    fuente: "api_directa",
+    actualizado_al: detalle[0].fecha,
+    freshness: "current",
+  };
 }
 
 export async function listarVariablesBcra(): Promise<{ id: number; descripcion: string }[]> {
-  const url = "https://api.bcra.gob.ar/estadisticas/v3.0/Monetarias";
-  const data = await fetchJSON<BCRAVariablesResponse>(url);
+  const url = "https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias";
+  const data = await fetchJSON<{ results: { idVariable: number; descripcion: string }[] }>(url);
   return data.results.map((r) => ({ id: r.idVariable, descripcion: r.descripcion }));
 }
 
