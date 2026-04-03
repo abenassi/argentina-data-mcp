@@ -8,6 +8,7 @@ import { indecStats } from "./indec_stats.js";
 import { boletinOficialSearch } from "./boletin_oficial_search.js";
 import { dataHealth } from "./data_health.js";
 import { dolarHistorico } from "./dolar_historico.js";
+import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -110,6 +111,41 @@ const dataHealthOutput = {
     error: z.string().nullable().describe("Error message if any"),
   })).describe("Health status for each data source"),
   resumen: z.string().describe("Summary line, e.g. '5/7 fuentes healthy'"),
+};
+
+// --- Discovery output schemas ---
+
+const listBcraVariablesOutput = {
+  variables: z.array(z.object({
+    nombre: z.string().describe("Variable key to use as 'variable' parameter in bcra_tipo_cambio"),
+    descripcion: z.string().describe("Human-readable description in Spanish"),
+    unidad: z.string().describe("Unit of measurement (ARS/USD, %, millones, índice)"),
+    id_bcra: z.number().describe("BCRA API internal variable ID"),
+  })).describe("All available BCRA variables"),
+  total: z.number().describe("Total number of available variables"),
+  uso: z.string().describe("Usage instructions for the agent"),
+};
+
+const listIndecIndicadoresOutput = {
+  indicadores: z.array(z.object({
+    nombre: z.string().describe("Indicator key to use as 'indicador' parameter in indec_stats"),
+    descripcion: z.string().describe("Full indicator name in Spanish"),
+    serie_id: z.string().describe("datos.gob.ar series ID"),
+    frecuencia: z.string().describe("Update frequency (mensual)"),
+  })).describe("All available INDEC indicators"),
+  total: z.number().describe("Total number of available indicators"),
+  uso: z.string().describe("Usage instructions for the agent"),
+};
+
+const listDolarTiposOutput = {
+  tipos: z.array(z.object({
+    nombre: z.string().describe("Dollar type key"),
+    descripcion: z.string().describe("Human-readable description in Spanish"),
+    tiene_historico: z.boolean().describe("Available in dolar_historico tool"),
+    tiene_cotizacion_actual: z.boolean().describe("Available in dolar_cotizaciones tool"),
+  })).describe("All available dollar types"),
+  total: z.number().describe("Total number of dollar types"),
+  uso: z.string().describe("Usage instructions for the agent"),
 };
 
 // --- Helper functions ---
@@ -271,5 +307,31 @@ export function registerTools(server: McpServer): void {
     } catch (error) {
       return errorResult(error);
     }
+  });
+
+  // --- Discovery tools ---
+
+  server.registerTool("list_bcra_variables", {
+    description: "Lista todas las variables monetarias y cambiarias del BCRA disponibles para consulta. Usá esta tool primero para descubrir qué datos podés pedir con bcra_tipo_cambio.",
+    outputSchema: listBcraVariablesOutput,
+    _meta: toolMeta({ executeUsd: "0.0005" }),
+  }, async () => {
+    return structuredResult(listBcraVariables());
+  });
+
+  server.registerTool("list_indec_indicadores", {
+    description: "Lista todos los indicadores estadísticos del INDEC disponibles para consulta. Usá esta tool primero para descubrir qué datos podés pedir con indec_stats.",
+    outputSchema: listIndecIndicadoresOutput,
+    _meta: toolMeta({ executeUsd: "0.0005" }),
+  }, async () => {
+    return structuredResult(listIndecIndicadores());
+  });
+
+  server.registerTool("list_dolar_tipos", {
+    description: "Lista todos los tipos de dólar disponibles en Argentina: oficial, blue, MEP, CCL, mayorista, cripto, tarjeta. Indica cuáles tienen datos históricos y cuáles cotización actual.",
+    outputSchema: listDolarTiposOutput,
+    _meta: toolMeta({ executeUsd: "0.0005" }),
+  }, async () => {
+    return structuredResult(listDolarTipos());
   });
 }
