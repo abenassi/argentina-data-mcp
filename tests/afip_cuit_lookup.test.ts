@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("../src/db/pool.js", () => ({
+  pool: { query: vi.fn().mockRejectedValue(new Error("no db in test")) },
+}));
+
 import { afipCuitLookup } from "../src/tools/afip_cuit_lookup.js";
 
 const mockFetch = vi.fn();
@@ -38,6 +43,7 @@ describe("afip_cuit_lookup", () => {
     expect(result.tipo_persona).toBe("JURIDICA");
     expect(result.estado).toBe("ACTIVO");
     expect(result.actividades).toContain("Servicios de consultores en informática");
+    expect(result.fuente).toBe("api_directa");
   });
 
   it("consulta datos de persona física", async () => {
