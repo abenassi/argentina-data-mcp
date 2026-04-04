@@ -8,19 +8,20 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools/register.js";
 import { createAuthMiddleware } from "./auth/middleware.js";
+import type { ApiKeyRole } from "./auth/api-keys.js";
 import { metadataHandler, authorizeHandler, tokenHandler, registerHandler } from "./auth/oauth.js";
 import { pool } from "./db/pool.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3100", 10);
 const BASE_URL = process.env.MCP_BASE_URL || `http://localhost:${PORT}`;
 
-function createServer(): McpServer {
+function createServer(role: ApiKeyRole = "user"): McpServer {
   const server = new McpServer({
     name: "argentina-data-mcp",
     version: "0.3.0",
   });
 
-  registerTools(server);
+  registerTools(server, role);
 
   return server;
 }
@@ -96,7 +97,8 @@ app.post("/mcp", async (req, res) => {
         }
       };
 
-      const server = createServer();
+      const role: ApiKeyRole = (req as any).apiKeyRole || "user";
+      const server = createServer(role);
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
       return;

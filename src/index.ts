@@ -10,7 +10,7 @@ const server = new McpServer({
   version: "0.3.0",
 });
 
-registerTools(server);
+registerTools(server, "dev"); // stdio is local/dev — see all tools including alpha
 
 async function main() {
   const transport = new StdioServerTransport();

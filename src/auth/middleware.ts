@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { isProtectedMcpMethod, verifyContextRequest } from "@ctxprotocol/sdk";
-import { validateApiKey } from "./api-keys.js";
+import { validateApiKey, getKeyRole } from "./api-keys.js";
+import type { ApiKeyRole } from "./api-keys.js";
 
 export interface AuthMiddlewareOptions {
   /** Expected audience for Context Protocol JWT validation (your tool URL) */
@@ -24,6 +25,14 @@ export function createAuthMiddleware(options?: AuthMiddlewareOptions) {
     }
 
     const method: string = req.body.method;
+
+    // Best-effort: extract role from API key on ALL requests (including discovery)
+    // This allows downstream code to know the user's role for tool filtering.
+    const earlyToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+    if (earlyToken) {
+      const role = getKeyRole(earlyToken);
+      if (role) (req as any).apiKeyRole = role;
+    }
 
     // Discovery methods pass without auth
     if (!isProtectedMcpMethod(method)) {
@@ -63,6 +72,7 @@ export function createAuthMiddleware(options?: AuthMiddlewareOptions) {
     // Try 2: API key from whitelist
     if (validateApiKey(token)) {
       (req as any).authSource = "api-key";
+      (req as any).apiKeyRole = getKeyRole(token) || "user";
       next();
       return;
     }

@@ -9,6 +9,7 @@ vi.mock("@ctxprotocol/sdk", () => ({
 // Mock api-keys module
 vi.mock("../src/auth/api-keys.js", () => ({
   validateApiKey: vi.fn(),
+  getKeyRole: vi.fn(),
 }));
 
 import { createAuthMiddleware } from "../src/auth/middleware.js";

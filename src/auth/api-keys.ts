@@ -2,10 +2,13 @@ import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 
+export type ApiKeyRole = "dev" | "user";
+
 export interface ApiKey {
   key: string;
   name: string;
   active: boolean;
+  role?: ApiKeyRole; // "dev" sees alpha+beta+stable, "user" sees beta+stable. Default: "user"
 }
 
 interface ApiKeysFile {
@@ -63,6 +66,13 @@ function getKeys(): ApiKey[] {
 export function validateApiKey(token: string): boolean {
   const keys = getKeys();
   return keys.some((k) => k.active && k.key === token);
+}
+
+/** Get the role for a given API key token. Returns undefined if key not found. */
+export function getKeyRole(token: string): ApiKeyRole | undefined {
+  const keys = getKeys();
+  const key = keys.find((k) => k.active && k.key === token);
+  return key ? (key.role || "user") : undefined;
 }
 
 // Force initial load

@@ -14,6 +14,39 @@ import { analisisEconomico } from "./analisis_economico.js";
 import { feriadosNacionales } from "./feriados_nacionales.js";
 import { afipSearchByName } from "./afip_search_by_name.js";
 import { logToolCall } from "../request_log.js";
+import type { ApiKeyRole } from "../auth/api-keys.js";
+
+// --- Tool lifecycle ---
+export type ToolLifecycle = "alpha" | "beta" | "stable";
+
+/** Lifecycle visibility: which roles can see which lifecycle stages */
+const LIFECYCLE_VISIBILITY: Record<ApiKeyRole, ToolLifecycle[]> = {
+  dev: ["alpha", "beta", "stable"],
+  user: ["beta", "stable"],
+};
+
+/** Current lifecycle stage for each tool */
+const TOOL_LIFECYCLE: Record<string, ToolLifecycle> = {
+  dolar_cotizaciones: "stable",
+  bcra_tipo_cambio: "stable",
+  infoleg_search: "stable",
+  boletin_oficial_search: "stable",
+  indec_stats: "stable",
+  dolar_historico: "stable",
+  data_health: "stable",
+  list_bcra_variables: "stable",
+  list_indec_indicadores: "stable",
+  list_dolar_tipos: "stable",
+  legislacion_tributaria: "stable",
+  analisis_economico: "stable",
+  feriados_nacionales: "stable",
+  afip_search_by_name: "stable",
+};
+
+function shouldRegister(toolName: string, role: ApiKeyRole): boolean {
+  const lifecycle = TOOL_LIFECYCLE[toolName] || "stable";
+  return LIFECYCLE_VISIBILITY[role].includes(lifecycle);
+}
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -249,11 +282,12 @@ const defaultRateLimit = {
   maxConcurrency: 5,
 };
 
-function toolMeta(overrides: { executeUsd: string; latencyClass?: string }) {
+function toolMeta(toolName: string, overrides: { executeUsd: string; latencyClass?: string }) {
   return {
     surface: "both",
     queryEligible: true,
     latencyClass: overrides.latencyClass || "instant",
+    lifecycle: TOOL_LIFECYCLE[toolName] || "stable",
     pricing: { executeUsd: overrides.executeUsd },
     rateLimit: defaultRateLimit,
   };
@@ -261,11 +295,12 @@ function toolMeta(overrides: { executeUsd: string; latencyClass?: string }) {
 
 // --- Register all tools on a server instance ---
 
-export function registerTools(server: McpServer): void {
+export function registerTools(server: McpServer, role: ApiKeyRole = "user"): void {
+  if (shouldRegister("dolar_cotizaciones", role))
   server.registerTool("dolar_cotizaciones", {
     description: "Consulta cotizaciones actuales del dólar en Argentina: oficial, blue, bolsa, CCL, mayorista, cripto, tarjeta. Fuente: DolarAPI.com (Ámbito Financiero).",
     outputSchema: dolarCotizacionesOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("dolar_cotizaciones", { executeUsd: "0.001" }),
   }, withLog("dolar_cotizaciones", async () => {
     try {
       return structuredResult(await dolarCotizaciones());
@@ -274,6 +309,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("bcra_tipo_cambio", role))
   server.registerTool("bcra_tipo_cambio", {
     description: "Consulta cotizaciones del dólar y variables monetarias del BCRA. Variables: dolar_oficial, dolar_mayorista, reservas, badlar, tm20, inflacion_mensual, inflacion_interanual, base_monetaria, circulacion_monetaria, icl.",
     inputSchema: {
@@ -282,7 +318,7 @@ export function registerTools(server: McpServer): void {
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
     outputSchema: bcraTipoCambioOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("bcra_tipo_cambio", { executeUsd: "0.001" }),
   }, withLog("bcra_tipo_cambio", async (input) => {
     try {
       return structuredResult(await bcraTipoCambio(input));
@@ -291,6 +327,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("infoleg_search", role))
   server.registerTool("infoleg_search", {
     description: "Busca legislación argentina (leyes, decretos, resoluciones) en la base de InfoLeg del Ministerio de Justicia. Requiere que el dump CSV haya sido importado.",
     inputSchema: {
@@ -299,7 +336,7 @@ export function registerTools(server: McpServer): void {
       limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
     },
     outputSchema: infolegSearchOutput,
-    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
+    _meta: toolMeta("infoleg_search", { executeUsd: "0.002", latencyClass: "fast" }),
   }, withLog("infoleg_search", async (input) => {
     try {
       return structuredResult(await infolegSearch(input));
@@ -308,6 +345,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("boletin_oficial_search", role))
   server.registerTool("boletin_oficial_search", {
     description: "Busca publicaciones en el Boletín Oficial de la República Argentina. Encuentra decretos, resoluciones, disposiciones y avisos por texto. Datos desde el dump diario del boletinoficial.gob.ar.",
     inputSchema: {
@@ -316,7 +354,7 @@ export function registerTools(server: McpServer): void {
       fecha: z.string().optional().describe("Filtrar por fecha de publicación (YYYY-MM-DD)"),
     },
     outputSchema: boletinOficialSearchOutput,
-    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
+    _meta: toolMeta("boletin_oficial_search", { executeUsd: "0.002", latencyClass: "fast" }),
   }, withLog("boletin_oficial_search", async (input) => {
     try {
       return structuredResult(await boletinOficialSearch(input));
@@ -325,6 +363,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("indec_stats", role))
   server.registerTool("indec_stats", {
     description: "Consulta indicadores estadísticos del INDEC. Indicadores disponibles: ipc (Precios al Consumidor), emae (Actividad Económica), ipc_nucleo, salarios, construccion, industria.",
     inputSchema: {
@@ -332,7 +371,7 @@ export function registerTools(server: McpServer): void {
       periodo: z.string().optional().describe("Período de inicio (YYYY-MM-DD). Default: último disponible"),
     },
     outputSchema: indecStatsOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("indec_stats", { executeUsd: "0.001" }),
   }, withLog("indec_stats", async (input) => {
     try {
       return structuredResult(await indecStats(input));
@@ -341,6 +380,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("dolar_historico", role))
   server.registerTool("dolar_historico", {
     description: "Consulta la evolución histórica del dólar en Argentina. Tipos: blue, oficial, mep, ccl, mayorista, cripto, tarjeta. Datos desde 2024. Fuente: Ámbito Financiero.",
     inputSchema: {
@@ -349,7 +389,7 @@ export function registerTools(server: McpServer): void {
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
     outputSchema: dolarHistoricoOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("dolar_historico", { executeUsd: "0.001" }),
   }, withLog("dolar_historico", async (input) => {
     try {
       return structuredResult(await dolarHistorico(input));
@@ -358,10 +398,11 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("data_health", role))
   server.registerTool("data_health", {
     description: "Reporta el estado actual de cada fuente de datos del MCP: si está activa, última actualización, cantidad de registros y errores. Útil para diagnóstico rápido.",
     outputSchema: dataHealthOutput,
-    _meta: toolMeta({ executeUsd: "0.0005" }),
+    _meta: toolMeta("data_health", { executeUsd: "0.0005" }),
   }, withLog("data_health", async () => {
     try {
       return structuredResult(await dataHealth());
@@ -372,39 +413,43 @@ export function registerTools(server: McpServer): void {
 
   // --- Discovery tools ---
 
+  if (shouldRegister("list_bcra_variables", role))
   server.registerTool("list_bcra_variables", {
     description: "Lista todas las variables monetarias y cambiarias del BCRA disponibles para consulta. Usá esta tool primero para descubrir qué datos podés pedir con bcra_tipo_cambio.",
     outputSchema: listBcraVariablesOutput,
-    _meta: toolMeta({ executeUsd: "0.0005" }),
+    _meta: toolMeta("list_bcra_variables", { executeUsd: "0.0005" }),
   }, withLog("list_bcra_variables", async () => {
     return structuredResult(listBcraVariables());
   }));
 
+  if (shouldRegister("list_indec_indicadores", role))
   server.registerTool("list_indec_indicadores", {
     description: "Lista todos los indicadores estadísticos del INDEC disponibles para consulta. Usá esta tool primero para descubrir qué datos podés pedir con indec_stats.",
     outputSchema: listIndecIndicadoresOutput,
-    _meta: toolMeta({ executeUsd: "0.0005" }),
+    _meta: toolMeta("list_indec_indicadores", { executeUsd: "0.0005" }),
   }, withLog("list_indec_indicadores", async () => {
     return structuredResult(listIndecIndicadores());
   }));
 
+  if (shouldRegister("list_dolar_tipos", role))
   server.registerTool("list_dolar_tipos", {
     description: "Lista todos los tipos de dólar disponibles en Argentina: oficial, blue, MEP, CCL, mayorista, cripto, tarjeta. Indica cuáles tienen datos históricos y cuáles cotización actual.",
     outputSchema: listDolarTiposOutput,
-    _meta: toolMeta({ executeUsd: "0.0005" }),
+    _meta: toolMeta("list_dolar_tipos", { executeUsd: "0.0005" }),
   }, withLog("list_dolar_tipos", async () => {
     return structuredResult(listDolarTipos());
   }));
 
   // --- Intelligence tools ---
 
+  if (shouldRegister("legislacion_tributaria", role))
   server.registerTool("legislacion_tributaria", {
     description: "Consulta datos estructurados de legislación tributaria argentina: monotributo (categorías A-K, cuotas, topes), ganancias (deducciones, escala de alícuotas), IVA (alícuotas). Datos pre-computados y actualizados.",
     inputSchema: {
       impuesto: z.string().optional().describe("Impuesto a consultar: monotributo, ganancias, iva (default: monotributo)"),
     },
     outputSchema: legislacionTributariaOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("legislacion_tributaria", { executeUsd: "0.001" }),
   }, withLog("legislacion_tributaria", async (input) => {
     try {
       return structuredResult(legislacionTributaria(input));
@@ -413,6 +458,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("analisis_economico", role))
   server.registerTool("analisis_economico", {
     description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación, combina IPC + salarios INDEC), brecha_cambiaria (spread blue/oficial/MEP histórico con tendencia). Devuelve análisis con conclusión, no solo datos crudos.",
     inputSchema: {
@@ -420,7 +466,7 @@ export function registerTools(server: McpServer): void {
       meses: z.number().optional().describe("Cantidad de meses a analizar (default: 12, max: 24)"),
     },
     outputSchema: analisisEconomicoOutput,
-    _meta: toolMeta({ executeUsd: "0.003", latencyClass: "fast" }),
+    _meta: toolMeta("analisis_economico", { executeUsd: "0.003", latencyClass: "fast" }),
   }, withLog("analisis_economico", async (input) => {
     try {
       return structuredResult(await analisisEconomico(input));
@@ -429,6 +475,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("feriados_nacionales", role))
   server.registerTool("feriados_nacionales", {
     description: "Consulta feriados nacionales argentinos por año o mes. Incluye feriados inamovibles, trasladables y puentes turísticos. Calcula días hábiles del mes si se especifica. Fuente: Argentina Datos.",
     inputSchema: {
@@ -436,7 +483,7 @@ export function registerTools(server: McpServer): void {
       mes: z.number().optional().describe("Mes a filtrar (1-12). Si se especifica, también calcula días hábiles"),
     },
     outputSchema: feriadosNacionalesOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
+    _meta: toolMeta("feriados_nacionales", { executeUsd: "0.001" }),
   }, withLog("feriados_nacionales", async (input) => {
     try {
       return structuredResult(await feriadosNacionales(input));
@@ -445,6 +492,7 @@ export function registerTools(server: McpServer): void {
     }
   }));
 
+  if (shouldRegister("afip_search_by_name", role))
   server.registerTool("afip_search_by_name", {
     description: "Busca contribuyentes en el padrón de ARCA (ex-AFIP) por nombre o denominación. Devuelve CUIT, estado fiscal, IVA, Ganancias y Monotributo. Útil cuando se conoce el nombre pero no el CUIT. Base: ~6 millones de contribuyentes.",
     inputSchema: {
@@ -452,7 +500,7 @@ export function registerTools(server: McpServer): void {
       limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
     },
     outputSchema: afipSearchByNameOutput,
-    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
+    _meta: toolMeta("afip_search_by_name", { executeUsd: "0.002", latencyClass: "fast" }),
   }, withLog("afip_search_by_name", async (input) => {
     try {
       return structuredResult(await afipSearchByName(input));
