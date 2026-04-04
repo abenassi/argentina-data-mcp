@@ -5,7 +5,7 @@ import { bcraTipoCambio } from "./bcra_tipo_cambio.js";
 import { infolegSearch } from "./infoleg_search.js";
 import { afipCuitLookup } from "./afip_cuit_lookup.js";
 import { indecStats } from "./indec_stats.js";
-import { boletinOficialSearch } from "./boletin_oficial_search.js";
+
 import { dataHealth } from "./data_health.js";
 import { dolarHistorico } from "./dolar_historico.js";
 import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
@@ -86,16 +86,6 @@ const indecStatsOutput = {
   freshness: freshnessSchema,
 };
 
-const boletinOficialSearchOutput = {
-  resultados: z.array(z.object({
-    titulo: z.string().describe("Publication title"),
-    seccion: z.string().describe("Section: primera, segunda, tercera"),
-    fecha: z.string().describe("Publication date (YYYY-MM-DD)"),
-    url: z.string().describe("URL to the official publication"),
-  })).describe("Search results from the Boletín Oficial"),
-  fuente: z.string().describe("Data source: postgresql, api_directa, or no_disponible"),
-  freshness: freshnessSchema,
-};
 
 const dolarHistoricoOutput = {
   tipo: z.string().describe("Dollar type: blue, oficial, mep, ccl, mayorista, cripto, tarjeta"),
@@ -290,23 +280,6 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(await indecStats(input));
-    } catch (error) {
-      return errorResult(error);
-    }
-  });
-
-  server.registerTool("boletin_oficial_search", {
-    description: "Busca publicaciones en el Boletín Oficial de la República Argentina. Permite filtrar por sección y fecha.",
-    inputSchema: {
-      query: z.string().describe("Texto a buscar en el Boletín Oficial"),
-      seccion: z.string().optional().describe("Sección: primera, segunda, tercera"),
-      fecha: z.string().optional().describe("Fecha (YYYY-MM-DD). Default: hoy"),
-    },
-    outputSchema: boletinOficialSearchOutput,
-    _meta: toolMeta({ executeUsd: "0.001", latencyClass: "fast" }),
-  }, async (input) => {
-    try {
-      return structuredResult(await boletinOficialSearch(input));
     } catch (error) {
       return errorResult(error);
     }
