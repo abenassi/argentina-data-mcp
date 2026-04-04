@@ -18,11 +18,11 @@ const TABLE_COUNTS: Record<string, string> = {
   bcra: "bcra_variables",
   indec: "indec_series",
   infoleg: "infoleg_normas",
+  boletin_oficial: "boletin_oficial",
 };
 
 const DISABLED_SOURCES: Record<string, string> = {
   afip: "Desactivada temporalmente — las APIs públicas de consulta CUIT están discontinuadas",
-  boletin_oficial: "Desactivada temporalmente — en proceso de reescritura con endpoint correcto",
 };
 
 export async function dataHealth(): Promise<DataHealthResult> {

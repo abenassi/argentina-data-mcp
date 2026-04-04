@@ -3,6 +3,7 @@ import { z } from "zod";
 import { dolarCotizaciones } from "./cotizaciones_dolar.js";
 import { bcraTipoCambio } from "./bcra_tipo_cambio.js";
 import { infolegSearch } from "./infoleg_search.js";
+import { boletinOficialSearch } from "./boletin_oficial_search.js";
 import { indecStats } from "./indec_stats.js";
 
 import { dataHealth } from "./data_health.js";
@@ -53,6 +54,20 @@ const infolegSearchOutput = {
   })).describe("Search results ranked by relevance and recency"),
   total: z.number().describe("Number of results returned"),
   fuente: z.string().describe("Data source: postgresql_fts"),
+  freshness: freshnessSchema,
+};
+
+const boletinOficialSearchOutput = {
+  resultados: z.array(z.object({
+    id_aviso: z.string().describe("Boletín Oficial aviso ID"),
+    organismo: z.string().describe("Publishing organization name"),
+    tipo_norma: z.string().describe("Norm type and number, e.g. 'Decreto 100/2026', 'Resolución 50/2026'"),
+    seccion: z.string().describe("Section: primera, segunda, tercera"),
+    fecha: z.string().describe("Publication date (YYYY-MM-DD)"),
+    url: z.string().describe("URL to view the full aviso on boletinoficial.gob.ar"),
+  })).describe("Search results ranked by date and relevance"),
+  total: z.number().describe("Number of results returned"),
+  fuente: z.string().describe("Data source: postgresql or api_directa"),
   freshness: freshnessSchema,
 };
 
@@ -231,6 +246,23 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(await infolegSearch(input));
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
+
+  server.registerTool("boletin_oficial_search", {
+    description: "Busca publicaciones en el Boletín Oficial de la República Argentina. Encuentra decretos, resoluciones, disposiciones y avisos por texto. Datos desde el dump diario del boletinoficial.gob.ar.",
+    inputSchema: {
+      query: z.string().describe("Texto a buscar (organismo, tipo de norma, tema)"),
+      seccion: z.string().optional().describe("Filtrar por sección: primera, segunda, tercera"),
+      fecha: z.string().optional().describe("Filtrar por fecha de publicación (YYYY-MM-DD)"),
+    },
+    outputSchema: boletinOficialSearchOutput,
+    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
+  }, async (input) => {
+    try {
+      return structuredResult(await boletinOficialSearch(input));
     } catch (error) {
       return errorResult(error);
     }

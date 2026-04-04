@@ -20,7 +20,7 @@ Agregá este MCP server como conector HTTP en tu cuenta de Claude:
 | `indec_stats` | Indicadores INDEC: IPC, EMAE, salarios, construcción (ISAC), industria (IPI) | ✅ |
 | `infoleg_search` | Búsqueda de legislación argentina (420K+ leyes, decretos, resoluciones) con full-text search | ✅ |
 | `afip_cuit_lookup` | Consulta de CUIT/CUIL en AFIP — desactivada, APIs públicas discontinuadas | ❌ |
-| `boletin_oficial_search` | B��squeda en el Boletín Oficial — desactivada, en proceso de reescritura | ❌ |
+| `boletin_oficial_search` | Búsqueda en el Boletín Oficial (decretos, resoluciones, disposiciones) | ✅ |
 | `data_health` | Estado de salud de todas las fuentes de datos | ✅ |
 
 ## Ejemplos de uso

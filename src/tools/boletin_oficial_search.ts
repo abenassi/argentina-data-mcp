@@ -1,21 +1,7 @@
-import { fetchJSON } from "../utils/http.js";
 import { pool } from "../db/pool.js";
+import { searchBoletin } from "../collectors/collect_boletin.js";
 
-// Boletín Oficial de la República Argentina
-
-interface BoletinItem {
-  id?: string;
-  denominacion?: string;
-  nombreSeccion?: string;
-  fechaPublicacion?: string;
-  nroNorma?: string;
-  tipo?: string;
-  url?: string;
-}
-
-interface BoletinResponse {
-  dataList?: BoletinItem[];
-}
+// Boletín Oficial search — FTS on PostgreSQL, API fallback for recent dates
 
 const SECCIONES: Record<string, string> = {
   primera: "primera",
@@ -26,16 +12,19 @@ const SECCIONES: Record<string, string> = {
 export interface BoletinOficialSearchInput {
   query: string;
   seccion?: string;
-  fecha?: string;
+  fecha?: string; // YYYY-MM-DD
 }
 
 export interface BoletinOficialSearchResult {
   resultados: {
-    titulo: string;
+    id_aviso: string;
+    organismo: string;
+    tipo_norma: string;
     seccion: string;
     fecha: string;
     url: string;
   }[];
+  total: number;
   fuente: string;
   freshness: "current" | "stale" | "unknown";
 }
@@ -49,41 +38,48 @@ export async function boletinOficialSearch(input: BoletinOficialSearchInput): Pr
     throw new Error(`Sección "${input.seccion}" no válida. Opciones: primera, segunda, tercera`);
   }
 
-  // Try PostgreSQL first
+  // Try PostgreSQL FTS first
   try {
-    let query: string;
-    const params: (string | number)[] = [`%${input.query}%`, 20];
+    const conditions = [
+      `to_tsvector('spanish', COALESCE(organismo, '') || ' ' || COALESCE(tipo_norma, '')) @@ plainto_tsquery('spanish', $1)`,
+    ];
+    const params: (string | number)[] = [input.query];
+    let paramIdx = 2;
 
-    if (input.seccion && input.fecha) {
-      query = `SELECT titulo, seccion, fecha, url FROM boletin_oficial
-               WHERE titulo ILIKE $1 AND seccion = $3 AND fecha = $4
-               ORDER BY fecha DESC LIMIT $2`;
-      params.push(input.seccion, input.fecha);
-    } else if (input.seccion) {
-      query = `SELECT titulo, seccion, fecha, url FROM boletin_oficial
-               WHERE titulo ILIKE $1 AND seccion = $3
-               ORDER BY fecha DESC LIMIT $2`;
+    if (input.seccion) {
+      conditions.push(`seccion = $${paramIdx}`);
       params.push(input.seccion);
-    } else if (input.fecha) {
-      query = `SELECT titulo, seccion, fecha, url FROM boletin_oficial
-               WHERE titulo ILIKE $1 AND fecha = $3
-               ORDER BY fecha DESC LIMIT $2`;
-      params.push(input.fecha);
-    } else {
-      query = `SELECT titulo, seccion, fecha, url FROM boletin_oficial
-               WHERE titulo ILIKE $1
-               ORDER BY fecha DESC LIMIT $2`;
+      paramIdx++;
     }
+
+    if (input.fecha) {
+      conditions.push(`fecha = $${paramIdx}`);
+      params.push(input.fecha);
+      paramIdx++;
+    }
+
+    const query = `
+      SELECT id_aviso, organismo, tipo_norma, seccion, fecha, url,
+             ts_rank(to_tsvector('spanish', COALESCE(organismo, '') || ' ' || COALESCE(tipo_norma, '')),
+                     plainto_tsquery('spanish', $1)) AS fts_rank
+      FROM boletin_oficial
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY fecha DESC, fts_rank DESC
+      LIMIT 20
+    `;
 
     const result = await pool.query(query, params);
     if (result.rows.length > 0) {
       return {
         resultados: result.rows.map((r: any) => ({
-          titulo: r.titulo || "(sin título)",
-          seccion: r.seccion || "desconocida",
-          fecha: r.fecha ? r.fecha.toISOString().split("T")[0] : "",
-          url: r.url || "",
+          id_aviso: r.id_aviso,
+          organismo: r.organismo,
+          tipo_norma: r.tipo_norma || "",
+          seccion: r.seccion,
+          fecha: r.fecha instanceof Date ? r.fecha.toISOString().split("T")[0] : String(r.fecha),
+          url: r.url,
         })),
+        total: result.rows.length,
         fuente: "postgresql",
         freshness: "current",
       };
@@ -92,46 +88,37 @@ export async function boletinOficialSearch(input: BoletinOficialSearchInput): Pr
     // DB not available, fall through to API
   }
 
-  // Fallback: direct API call (may fail - API is known to be blocked)
-  const fecha = input.fecha || formatDate(new Date());
-  const params = new URLSearchParams({
-    denominacion: input.query,
-    fecha_desde: fecha,
-    fecha_hasta: fecha,
-  });
-
-  if (input.seccion) {
-    params.set("seccion", input.seccion);
-  }
-
+  // Fallback: search API
   try {
-    const url = `https://www.boletinoficial.gob.ar/api/search/normas?${params}`;
-    const data = await fetchJSON<BoletinResponse>(url);
+    const fechaApi = input.fecha
+      ? input.fecha.replace(/-/g, "")
+      : new Date().toISOString().split("T")[0].replace(/-/g, "");
 
-    if (!data.dataList || data.dataList.length === 0) {
-      return { resultados: [], fuente: "api_directa", freshness: "unknown" };
-    }
+    const avisos = await searchBoletin(input.query, fechaApi);
+
+    const filtered = input.seccion
+      ? avisos.filter((a) => a.seccion === input.seccion)
+      : avisos;
 
     return {
-      resultados: data.dataList.map((item) => ({
-        titulo: item.denominacion || item.tipo || "(sin título)",
-        seccion: item.nombreSeccion || "desconocida",
-        fecha: item.fechaPublicacion || fecha,
-        url: item.url || `https://www.boletinoficial.gob.ar/detalleAviso/${item.id}`,
+      resultados: filtered.map((a) => ({
+        id_aviso: a.id_aviso,
+        organismo: a.organismo,
+        tipo_norma: a.tipo_norma,
+        seccion: a.seccion,
+        fecha: `${a.fecha.substring(0, 4)}-${a.fecha.substring(4, 6)}-${a.fecha.substring(6, 8)}`,
+        url: a.url,
       })),
+      total: filtered.length,
       fuente: "api_directa",
       freshness: "current",
     };
   } catch {
     return {
       resultados: [],
+      total: 0,
       fuente: "no_disponible",
       freshness: "unknown",
-      mensaje: "El Boletín Oficial no está respondiendo en este momento. La API oficial no acepta consultas externas. No hay datos precargados disponibles.",
-    } as any;
+    };
   }
-}
-
-function formatDate(d: Date): string {
-  return d.toISOString().split("T")[0];
 }
