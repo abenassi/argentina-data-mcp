@@ -61,10 +61,15 @@ const afipCuitLookupOutput = {
   cuit: z.string().describe("CUIT/CUIL number (11 digits, no separators)"),
   denominacion: z.string().describe("Legal name or business name"),
   tipo_persona: z.string().describe("Person type: FISICA or JURIDICA"),
-  estado: z.string().describe("Tax registration status: ACTIVO, INACTIVO, etc."),
-  actividades: z.array(z.string()).describe("Registered economic activities"),
-  fuente: z.string().describe("Data source: cache_postgresql, api_directa"),
-  actualizado_al: z.string().describe("Cache timestamp (ISO 8601)"),
+  estado: z.string().describe("Tax registration status: ACTIVO, EXENTO, INACTIVO"),
+  imp_ganancias: z.string().describe("Income tax status: Activo, No Inscripto, Exento, No Corresponde"),
+  imp_iva: z.string().describe("VAT status: Responsable Inscripto, No Inscripto, Exento, No Alcanzado"),
+  monotributo: z.string().describe("Monotributo status: Categoría A-K, No Inscripto, or Activo"),
+  actividad_monotributo: z.string().describe("Monotributo activity: Comercial, Profesional, Servicios, Industrial, etc."),
+  empleador: z.boolean().describe("Whether registered as employer"),
+  integrante_sociedad: z.boolean().describe("Whether member of a partnership/society"),
+  fuente: z.string().describe("Data source: padron_afip_zip"),
+  actualizado_al: z.string().describe("Padrón import timestamp (ISO 8601)"),
   freshness: freshnessSchema,
 };
 
@@ -259,12 +264,12 @@ export function registerTools(server: McpServer): void {
   });
 
   server.registerTool("afip_cuit_lookup", {
-    description: "Consulta datos públicos asociados a un CUIT/CUIL en el padrón de AFIP. Retorna denominación, tipo de persona, estado y actividades. Usa cache en PostgreSQL.",
+    description: "Consulta datos tributarios de un CUIT/CUIL en el padrón de AFIP (~6M contribuyentes). Retorna denominación, estado en Ganancias/IVA/Monotributo, categoría, si es empleador. Fuente: padrón público de ARCA, actualización semanal.",
     inputSchema: {
       cuit: z.string().describe("CUIT o CUIL a consultar (11 dígitos, con o sin guiones)"),
     },
     outputSchema: afipCuitLookupOutput,
-    _meta: toolMeta({ executeUsd: "0.001", latencyClass: "fast" }),
+    _meta: toolMeta({ executeUsd: "0.001" }),
   }, async (input) => {
     try {
       return structuredResult(await afipCuitLookup(input));

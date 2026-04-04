@@ -1,33 +1,60 @@
-import { fetchJSON } from "../utils/http.js";
 import { pool } from "../db/pool.js";
 
-// AFIP CUIT lookup with PostgreSQL cache
-
-interface AfipPersonaResponse {
-  persona?: {
-    tipoClave: string;
-    idPersona: number;
-    nombre?: string;
-    apellido?: string;
-    razonSocial?: string;
-    tipoPersona: string;
-    estadoClave: string;
-    actividades?: { idActividad: number; descripcion: string }[];
-  };
-  success?: boolean;
-  error?: string;
-}
+// AFIP CUIT lookup from padrón ZIP data in PostgreSQL
 
 export interface AfipCuitLookupInput {
   cuit: string;
 }
+
+// Human-readable labels for tax status codes
+const GANANCIAS_LABELS: Record<string, string> = {
+  AC: "Activo",
+  NI: "No Inscripto",
+  EX: "Exento",
+  NC: "No Corresponde",
+};
+
+const IVA_LABELS: Record<string, string> = {
+  AC: "Responsable Inscripto",
+  NI: "No Inscripto",
+  EX: "Exento",
+  NA: "No Alcanzado",
+  XN: "Exento - No Alcanzado",
+  AN: "Activo - No Alcanzado",
+};
+
+const MONOTRIBUTO_LABELS: Record<string, string> = {
+  NI: "No Inscripto",
+  AC: "Activo (sin categoría)",
+  ...(Object.fromEntries("ABCDEFGHIJK".split("").map((c) => [c, `Categoría ${c}`]))),
+};
+
+const ACTIVIDAD_MONOTRIBUTO_LABELS: Record<string, string> = {
+  "00": "No registrada",
+  "01": "Comercial",
+  "02": "Profesional",
+  "03": "Servicios",
+  "04": "Industrial",
+  "05": "Agropecuaria",
+  "06": "Otras",
+  "07": "Transitoria",
+  "08": "Servicios/Locación",
+  "09": "Otras actividades",
+  "10": "Venta",
+  "11": "Agricultura familiar",
+};
 
 export interface AfipCuitLookupResult {
   cuit: string;
   denominacion: string;
   tipo_persona: string;
   estado: string;
-  actividades: string[];
+  imp_ganancias: string;
+  imp_iva: string;
+  monotributo: string;
+  actividad_monotributo: string;
+  empleador: boolean;
+  integrante_sociedad: boolean;
   fuente: string;
   actualizado_al: string;
   freshness: "current" | "stale" | "unknown";
@@ -44,75 +71,38 @@ function validateCuit(cuit: string): string {
 export async function afipCuitLookup(input: AfipCuitLookupInput): Promise<AfipCuitLookupResult> {
   const cuit = validateCuit(input.cuit);
 
-  // Check PostgreSQL cache first
-  try {
-    const cached = await pool.query(
-      "SELECT denominacion, tipo_persona, estado, actividades, fetched_at FROM afip_cuit_cache WHERE cuit = $1",
-      [cuit]
-    );
-    if (cached.rows.length > 0) {
-      const row = cached.rows[0];
-      const ageHours = (Date.now() - new Date(row.fetched_at).getTime()) / 3600000;
-      return {
-        cuit,
-        denominacion: row.denominacion || "N/A",
-        tipo_persona: row.tipo_persona || "desconocido",
-        estado: row.estado || "desconocido",
-        actividades: row.actividades || [],
-        fuente: "cache_postgresql",
-        actualizado_al: row.fetched_at.toISOString(),
-        freshness: ageHours < 168 ? "current" : "stale", // 7 days
-      };
-    }
-  } catch {
-    // DB not available, fall through to API
-  }
+  const result = await pool.query(
+    `SELECT denominacion, tipo_persona, estado, imp_ganancias, imp_iva, monotributo,
+            actividad_monotributo, empleador, integrante_sociedad, fetched_at
+     FROM afip_cuit_cache WHERE cuit = $1`,
+    [cuit]
+  );
 
-  // Try API (currently known to be down, but kept for when it comes back)
-  let data: AfipPersonaResponse;
-  try {
-    const url = `https://afip.tangofactura.com/Rest/GetContribuyenteCompleto?cuit=${cuit}`;
-    data = await fetchJSON<AfipPersonaResponse>(url);
-  } catch (apiError) {
+  if (result.rows.length === 0) {
     throw new Error(
-      `La consulta de CUIT no está disponible en este momento. ` +
-      `La API de AFIP/TangoFactura no responde. ` +
-      `No hay datos en cache para el CUIT ${cuit}. Intentá más tarde.`
+      `CUIT ${cuit} no encontrado en el padrón de AFIP. ` +
+      `El padrón contiene ~6 millones de contribuyentes registrados. ` +
+      `Si el CUIT es válido, puede no estar registrado o haber sido dado de baja.`
     );
   }
 
-  if (!data.persona && data.error) {
-    throw new Error(`CUIT ${cuit} no encontrado: ${data.error}`);
-  }
-
-  if (!data.persona) {
-    throw new Error(`CUIT ${cuit} no encontrado en el padrón de AFIP`);
-  }
-
-  const p = data.persona;
-  const denominacion = p.razonSocial || [p.apellido, p.nombre].filter(Boolean).join(", ") || "N/A";
-  const actividades = (p.actividades || []).map((a) => a.descripcion);
-
-  // Cache in PostgreSQL
-  try {
-    await pool.query(
-      `INSERT INTO afip_cuit_cache (cuit, denominacion, tipo_persona, estado, actividades, raw_json, fetched_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (cuit) DO UPDATE SET denominacion=$2, tipo_persona=$3, estado=$4, actividades=$5, raw_json=$6, fetched_at=NOW()`,
-      [cuit, denominacion, p.tipoPersona, p.estadoClave, JSON.stringify(actividades), JSON.stringify(data)]
-    );
-  } catch {
-    // Cache write failure is non-fatal
-  }
+  const row = result.rows[0];
+  const ageHours = (Date.now() - new Date(row.fetched_at).getTime()) / 3600000;
+  const ageDays = ageHours / 24;
 
   return {
     cuit,
-    denominacion,
-    tipo_persona: p.tipoPersona || "desconocido",
-    estado: p.estadoClave || "desconocido",
-    actividades,
-    fuente: "api_directa",
-    actualizado_al: new Date().toISOString(),
-    freshness: "current",
+    denominacion: row.denominacion || "N/A",
+    tipo_persona: row.tipo_persona || "desconocido",
+    estado: row.estado || "desconocido",
+    imp_ganancias: GANANCIAS_LABELS[row.imp_ganancias] || row.imp_ganancias || "desconocido",
+    imp_iva: IVA_LABELS[row.imp_iva] || row.imp_iva || "desconocido",
+    monotributo: MONOTRIBUTO_LABELS[row.monotributo] || row.monotributo || "desconocido",
+    actividad_monotributo: ACTIVIDAD_MONOTRIBUTO_LABELS[row.actividad_monotributo] || row.actividad_monotributo || "desconocido",
+    empleador: row.empleador ?? false,
+    integrante_sociedad: row.integrante_sociedad ?? false,
+    fuente: "padron_afip_zip",
+    actualizado_al: row.fetched_at.toISOString(),
+    freshness: ageDays < 14 ? "current" : "stale",
   };
 }
