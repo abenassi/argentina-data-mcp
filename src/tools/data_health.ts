@@ -19,11 +19,10 @@ const TABLE_COUNTS: Record<string, string> = {
   indec: "indec_series",
   infoleg: "infoleg_normas",
   boletin_oficial: "boletin_oficial",
+  afip: "afip_cuit_cache",
 };
 
-const DISABLED_SOURCES: Record<string, string> = {
-  afip: "Desactivada temporalmente — las APIs públicas de consulta CUIT están discontinuadas",
-};
+const DISABLED_SOURCES: Record<string, string> = {};
 
 export async function dataHealth(): Promise<DataHealthResult> {
   const fuentes: DataHealthResult["fuentes"] = [];
@@ -39,8 +38,19 @@ export async function dataHealth(): Promise<DataHealthResult> {
 
   // Get row counts for each table
   for (const [source, table] of Object.entries(TABLE_COUNTS)) {
-    const countResult = await pool.query(`SELECT COUNT(*) as cnt FROM ${table}`);
-    const count = Number(countResult.rows[0].cnt);
+    let count = 0;
+    try {
+      const countResult = await pool.query(`SELECT COUNT(*) as cnt FROM ${table}`);
+      count = Number(countResult.rows[0].cnt);
+    } catch {
+      // Table may not exist or be inaccessible
+      fuentes.push({
+        nombre: source, estado: "down",
+        ultima_actualizacion: null, ultimo_dato: null,
+        registros: 0, error: `Table ${table} not accessible`,
+      });
+      continue;
+    }
     const fresh = freshnessMap.get(source);
 
     let estado: "healthy" | "degraded" | "down";

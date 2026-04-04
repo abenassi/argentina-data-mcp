@@ -81,10 +81,14 @@ async function analizarPoderAdquisitivo(meses: number): Promise<AnalisisResult> 
     ]);
     fuente = "postgresql";
   } catch {
-    const apiData = await fetchSeriesFromApi([IPC_ID, SALARIOS_ID], meses);
-    ipcSeries = apiData.get(IPC_ID) || [];
-    salariosSeries = apiData.get(SALARIOS_ID) || [];
-    fuente = "api_directa";
+    try {
+      const apiData = await fetchSeriesFromApi([IPC_ID, SALARIOS_ID], meses);
+      ipcSeries = apiData.get(IPC_ID) || [];
+      salariosSeries = apiData.get(SALARIOS_ID) || [];
+      fuente = "api_directa";
+    } catch {
+      throw new Error("No se pudieron obtener datos de IPC y salarios ni de la base de datos ni de la API de datos.gob.ar");
+    }
   }
 
   if (ipcSeries.length < 2 || salariosSeries.length < 2) {

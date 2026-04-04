@@ -45,11 +45,14 @@ export async function dolarHistorico(input: DolarHistoricoInput): Promise<DolarH
   }
 
   // Check freshness from data_freshness table
-  const freshRow = await pool.query(
-    "SELECT last_successful_fetch FROM data_freshness WHERE source_name = 'dolar_historico'"
-  );
-  const lastFetch = freshRow.rows[0]?.last_successful_fetch;
-  const ageHours = lastFetch ? (Date.now() - new Date(lastFetch).getTime()) / 3600000 : 999;
+  let ageHours = 999;
+  try {
+    const freshRow = await pool.query(
+      "SELECT last_successful_fetch FROM data_freshness WHERE source_name = 'dolar_historico'"
+    );
+    const lastFetch = freshRow.rows[0]?.last_successful_fetch;
+    ageHours = lastFetch ? (Date.now() - new Date(lastFetch).getTime()) / 3600000 : 999;
+  } catch { /* freshness metadata is best-effort */ }
 
   return {
     tipo,
