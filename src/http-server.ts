@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools/register.js";
+import { createAuthMiddleware } from "./auth/middleware.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3100", 10);
 
@@ -26,6 +27,11 @@ const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 const app = express();
 app.use(express.json());
+
+// Auth middleware — protects tools/call, allows discovery
+app.use("/mcp", createAuthMiddleware({
+  audience: process.env.MCP_AUTH_AUDIENCE,
+}));
 
 // Health check
 app.get("/health", (_req, res) => {

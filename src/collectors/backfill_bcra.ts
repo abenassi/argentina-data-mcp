@@ -19,7 +19,6 @@ const VARIABLES: { id: number; nombre: string }[] = [
   { id: 7, nombre: "badlar" },
   { id: 27, nombre: "inflacion_mensual" },
   { id: 15, nombre: "base_monetaria" },
-  // Note: variable 6 (tasa_politica) returns 400 on v4, skipped
 ];
 
 async function backfillVariable(variable: { id: number; nombre: string }, desde: string, hasta: string): Promise<number> {
