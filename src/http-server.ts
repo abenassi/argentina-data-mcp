@@ -9,6 +9,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools/register.js";
 import { createAuthMiddleware } from "./auth/middleware.js";
 import { metadataHandler, authorizeHandler, tokenHandler, registerHandler } from "./auth/oauth.js";
+import { pool } from "./db/pool.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3100", 10);
 const BASE_URL = process.env.MCP_BASE_URL || `http://localhost:${PORT}`;
@@ -43,9 +44,30 @@ app.use("/mcp", createAuthMiddleware({
   audience: process.env.MCP_AUTH_AUDIENCE,
 }));
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "argentina-data-mcp", version: "0.3.0" });
+// Health check — returns 200 if PostgreSQL is reachable, 503 otherwise
+app.get("/health", async (_req, res) => {
+  try {
+    const start = Date.now();
+    await pool.query("SELECT 1");
+    const dbLatencyMs = Date.now() - start;
+    res.json({
+      status: "ok",
+      server: "argentina-data-mcp",
+      version: "0.3.0",
+      postgres: "connected",
+      dbLatencyMs,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: "degraded",
+      server: "argentina-data-mcp",
+      version: "0.3.0",
+      postgres: "unreachable",
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // MCP POST endpoint
