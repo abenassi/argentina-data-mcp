@@ -8,8 +8,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools/register.js";
 import { createAuthMiddleware } from "./auth/middleware.js";
+import { metadataHandler, authorizeHandler, tokenHandler, registerHandler } from "./auth/oauth.js";
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || "3100", 10);
+const BASE_URL = process.env.MCP_BASE_URL || `http://localhost:${PORT}`;
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -27,6 +29,13 @@ const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 const app = express();
 app.use(express.json());
+
+// OAuth 2.1 endpoints (must be before auth middleware)
+app.use(express.urlencoded({ extended: false }));
+app.get("/.well-known/oauth-authorization-server", metadataHandler(BASE_URL));
+app.get("/authorize", authorizeHandler);
+app.post("/token", tokenHandler);
+app.post("/register", registerHandler);
 
 // Auth middleware — protects tools/call, allows discovery
 app.use("/mcp", createAuthMiddleware({

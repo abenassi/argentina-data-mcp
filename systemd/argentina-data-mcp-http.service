@@ -11,6 +11,7 @@ RestartSec=10
 Environment=NODE_ENV=production
 Environment=MCP_HTTP_PORT=3100
 Environment=API_KEYS_PATH=/home/abenassi/.secrets/argentina-data-mcp-keys.json
+Environment=MCP_BASE_URL=https://argentinadata.mymcps.dev
 EnvironmentFile=/home/abenassi/repos/argentina-data-mcp/.env
 
 [Install]
