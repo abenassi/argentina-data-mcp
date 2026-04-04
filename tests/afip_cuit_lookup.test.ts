@@ -38,6 +38,7 @@ describe("afip_cuit_lookup", () => {
     expect(result.monotributo).toBe("No Inscripto");
     expect(result.empleador).toBe(true);
     expect(result.fuente).toBe("padron_afip_zip");
+    expect(result.nota_frescura).toContain("hasta 7 días de demora");
   });
 
   it("consulta datos de monotributista categoría A", async () => {

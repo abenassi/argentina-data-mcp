@@ -58,6 +58,7 @@ export interface AfipCuitLookupResult {
   fuente: string;
   actualizado_al: string;
   freshness: "current" | "stale" | "unknown";
+  nota_frescura: string;
 }
 
 function validateCuit(cuit: string): string {
@@ -104,5 +105,6 @@ export async function afipCuitLookup(input: AfipCuitLookupInput): Promise<AfipCu
     fuente: "padron_afip_zip",
     actualizado_al: row.fetched_at.toISOString(),
     freshness: ageDays < 14 ? "current" : "stale",
+    nota_frescura: `Datos del padrón público de ARCA importados el ${row.fetched_at.toISOString().split("T")[0]}. Este padrón se actualiza semanalmente, por lo que la información puede tener hasta 7 días de demora respecto a cambios recientes.`,
   };
 }

@@ -71,6 +71,7 @@ const afipCuitLookupOutput = {
   fuente: z.string().describe("Data source: padron_afip_zip"),
   actualizado_al: z.string().describe("Padrón import timestamp (ISO 8601)"),
   freshness: freshnessSchema,
+  nota_frescura: z.string().describe("ALWAYS communicate this disclaimer to the user: data may be up to 7 days old"),
 };
 
 const indecStatsOutput = {
@@ -264,7 +265,7 @@ export function registerTools(server: McpServer): void {
   });
 
   server.registerTool("afip_cuit_lookup", {
-    description: "Consulta datos tributarios de un CUIT/CUIL en el padrón de AFIP (~6M contribuyentes). Retorna denominación, estado en Ganancias/IVA/Monotributo, categoría, si es empleador. Fuente: padrón público de ARCA, actualización semanal.",
+    description: "Consulta datos tributarios de un CUIT/CUIL en el padrón de AFIP (~6M contribuyentes). Retorna denominación, estado en Ganancias/IVA/Monotributo, categoría, si es empleador. IMPORTANTE: los datos provienen del padrón público de ARCA que se actualiza semanalmente, por lo que pueden tener hasta 7 días de demora respecto a cambios recientes en la situación tributaria del contribuyente.",
     inputSchema: {
       cuit: z.string().describe("CUIT o CUIL a consultar (11 dígitos, con o sin guiones)"),
     },
