@@ -12,6 +12,7 @@ import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./disco
 import { legislacionTributaria } from "./legislacion_tributaria.js";
 import { analisisEconomico } from "./analisis_economico.js";
 import { feriadosNacionales } from "./feriados_nacionales.js";
+import { afipSearchByName } from "./afip_search_by_name.js";
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -188,6 +189,26 @@ const feriadosNacionalesOutput = {
   dias_habiles: z.number().nullable().describe("Business days in the month (only when mes is specified)"),
   fuente: z.string().describe("Original data source name"),
   fuente_url: z.string().describe("URL of the original data source"),
+};
+
+// --- AFIP search by name output schema ---
+
+const afipSearchByNameOutput = {
+  resultados: z.array(z.object({
+    cuit: z.string().describe("CUIT number (11 digits)"),
+    denominacion: z.string().describe("Name or business name"),
+    tipo_persona: z.string().describe("Person type: FISICA or JURIDICA"),
+    estado: z.string().describe("Registration status: ACTIVO, INACTIVO"),
+    imp_ganancias: z.string().describe("Income tax status"),
+    imp_iva: z.string().describe("VAT status"),
+    monotributo: z.string().describe("Monotributo category (A-K) or registration status"),
+    empleador: z.boolean().describe("Whether registered as employer"),
+    integrante_sociedad: z.boolean().describe("Whether member of a company/partnership"),
+  })).describe("Matching taxpayer records sorted by similarity"),
+  total: z.number().describe("Number of results returned"),
+  query: z.string().describe("Original search query"),
+  fuente: z.string().describe("Data source identifier"),
+  nota: z.string().describe("Note about the data source and coverage"),
 };
 
 // --- Helper functions ---
@@ -406,6 +427,22 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(await feriadosNacionales(input));
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
+
+  server.registerTool("afip_search_by_name", {
+    description: "Busca contribuyentes en el padrón de ARCA (ex-AFIP) por nombre o denominación. Devuelve CUIT, estado fiscal, IVA, Ganancias y Monotributo. Útil cuando se conoce el nombre pero no el CUIT. Base: ~6 millones de contribuyentes.",
+    inputSchema: {
+      nombre: z.string().describe("Nombre o denominación a buscar (mínimo 3 caracteres)"),
+      limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
+    },
+    outputSchema: afipSearchByNameOutput,
+    _meta: toolMeta({ executeUsd: "0.002", latencyClass: "fast" }),
+  }, async (input) => {
+    try {
+      return structuredResult(await afipSearchByName(input));
     } catch (error) {
       return errorResult(error);
     }
