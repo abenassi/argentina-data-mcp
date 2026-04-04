@@ -11,6 +11,7 @@ import { dolarHistorico } from "./dolar_historico.js";
 import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
 import { legislacionTributaria } from "./legislacion_tributaria.js";
 import { analisisEconomico } from "./analisis_economico.js";
+import { feriadosNacionales } from "./feriados_nacionales.js";
 
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
@@ -171,6 +172,22 @@ const analisisEconomicoOutput = {
   conclusion: z.string().describe("Human-readable conclusion in Spanish"),
   confianza: z.enum(["alta", "media", "baja"]).describe("Confidence level based on data quality"),
   fuentes: z.array(z.string()).describe("Data sources used for the analysis"),
+};
+
+// --- Feriados output schema ---
+
+const feriadosNacionalesOutput = {
+  anio: z.number().describe("Year of the holidays"),
+  mes: z.number().nullable().describe("Month filter (null if showing full year)"),
+  feriados: z.array(z.object({
+    fecha: z.string().describe("Holiday date (YYYY-MM-DD)"),
+    nombre: z.string().describe("Holiday name in Spanish"),
+    tipo: z.string().describe("Holiday type: inamovible, trasladable, puente"),
+  })).describe("List of national holidays"),
+  total: z.number().describe("Number of holidays returned"),
+  dias_habiles: z.number().nullable().describe("Business days in the month (only when mes is specified)"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
 };
 
 // --- Helper functions ---
@@ -373,6 +390,22 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(await analisisEconomico(input));
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
+
+  server.registerTool("feriados_nacionales", {
+    description: "Consulta feriados nacionales argentinos por año o mes. Incluye feriados inamovibles, trasladables y puentes turísticos. Calcula días hábiles del mes si se especifica. Fuente: Argentina Datos.",
+    inputSchema: {
+      anio: z.number().optional().describe("Año a consultar (default: año actual)"),
+      mes: z.number().optional().describe("Mes a filtrar (1-12). Si se especifica, también calcula días hábiles"),
+    },
+    outputSchema: feriadosNacionalesOutput,
+    _meta: toolMeta({ executeUsd: "0.001" }),
+  }, async (input) => {
+    try {
+      return structuredResult(await feriadosNacionales(input));
     } catch (error) {
       return errorResult(error);
     }
