@@ -5,9 +5,7 @@ import cron from "node-cron";
 import { collectDolar } from "./collect_dolar.js";
 import { collectBcra } from "./collect_bcra.js";
 import { collectIndec } from "./collect_indec.js";
-import { collectBoletin } from "./collect_boletin.js";
 import { collectDolarHistorico } from "./collect_dolar_historico.js";
-import { collectAfipPadron } from "./collect_afip_padron.js";
 import { pool } from "../db/pool.js";
 import type { CollectorResult } from "../types/collector.js";
 
@@ -38,14 +36,7 @@ async function main() {
   await runCollector("dolar", collectDolar);
   await runCollector("bcra", collectBcra);
   await runCollector("indec", collectIndec);
-  await runCollector("boletin", collectBoletin);
   await runCollector("dolar_historico", collectDolarHistorico);
-  // AFIP padrón: large import, only on startup if table is empty
-  const afipCount = await pool.query("SELECT COUNT(*) as cnt FROM afip_cuit_cache");
-  if (Number(afipCount.rows[0].cnt) === 0) {
-    console.log("AFIP padrón table is empty, running initial import...");
-    await runCollector("afip_padron", collectAfipPadron);
-  }
   console.log("Initial collection complete.\n");
 
   // Schedule recurring collections
@@ -58,22 +49,14 @@ async function main() {
   // INDEC: daily at 3 AM
   cron.schedule("0 3 * * *", () => runCollector("indec", collectIndec));
 
-  // Boletín Oficial: weekdays at 8 AM (if API works)
-  cron.schedule("0 8 * * 1-5", () => runCollector("boletin", collectBoletin));
-
   // Dólar Histórico: daily at 6 AM (fetches last 7 days from Ámbito)
   cron.schedule("0 6 * * *", () => runCollector("dolar_historico", collectDolarHistorico));
-
-  // AFIP Padrón: weekly on Sundays at 3 AM
-  cron.schedule("0 3 * * 0", () => runCollector("afip_padron", collectAfipPadron));
 
   console.log("Scheduled collectors:");
   console.log("  dolar:           every 15 minutes");
   console.log("  bcra:            every hour");
   console.log("  indec:           daily at 03:00");
   console.log("  dolar_historico: daily at 06:00");
-  console.log("  boletin:         weekdays at 08:00");
-  console.log("  afip_padron:     Sundays at 03:00");
   console.log("\nCollector runner is active. Press Ctrl+C to stop.");
 }
 

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { dolarCotizaciones } from "./cotizaciones_dolar.js";
 import { bcraTipoCambio } from "./bcra_tipo_cambio.js";
 import { infolegSearch } from "./infoleg_search.js";
-import { afipCuitLookup } from "./afip_cuit_lookup.js";
 import { indecStats } from "./indec_stats.js";
 
 import { dataHealth } from "./data_health.js";
@@ -57,23 +56,6 @@ const infolegSearchOutput = {
   freshness: freshnessSchema,
 };
 
-const afipCuitLookupOutput = {
-  cuit: z.string().describe("CUIT/CUIL number (11 digits, no separators)"),
-  denominacion: z.string().describe("Legal name or business name"),
-  tipo_persona: z.string().describe("Person type: FISICA or JURIDICA"),
-  estado: z.string().describe("Tax registration status: ACTIVO, EXENTO, INACTIVO"),
-  imp_ganancias: z.string().describe("Income tax status: Activo, No Inscripto, Exento, No Corresponde"),
-  imp_iva: z.string().describe("VAT status: Responsable Inscripto, No Inscripto, Exento, No Alcanzado"),
-  monotributo: z.string().describe("Monotributo status: Categoría A-K, No Inscripto, or Activo"),
-  actividad_monotributo: z.string().describe("Monotributo activity: Comercial, Profesional, Servicios, Industrial, etc."),
-  empleador: z.boolean().describe("Whether registered as employer"),
-  integrante_sociedad: z.boolean().describe("Whether member of a partnership/society"),
-  fuente: z.string().describe("Data source: padron_afip_zip"),
-  actualizado_al: z.string().describe("Padrón import timestamp (ISO 8601)"),
-  freshness: freshnessSchema,
-  nota_frescura: z.string().describe("ALWAYS communicate this disclaimer to the user: data may be up to 7 days old"),
-};
-
 const indecStatsOutput = {
   indicador: z.string().describe("Indicator key: ipc, emae, ipc_nucleo, salarios, construccion, industria"),
   descripcion: z.string().describe("Full indicator description in Spanish"),
@@ -102,7 +84,7 @@ const dolarHistoricoOutput = {
 const dataHealthOutput = {
   fuentes: z.array(z.object({
     nombre: z.string().describe("Data source name: dolar, bcra, indec, infoleg, etc."),
-    estado: z.enum(["healthy", "degraded", "down"]).describe("Source health status"),
+    estado: z.enum(["healthy", "degraded", "down", "disabled"]).describe("Source health status"),
     ultima_actualizacion: z.string().nullable().describe("Last successful collector run (ISO 8601)"),
     ultimo_dato: z.string().nullable().describe("Most recent data date (YYYY-MM-DD)"),
     registros: z.number().describe("Total records in the database table"),
@@ -249,21 +231,6 @@ export function registerTools(server: McpServer): void {
   }, async (input) => {
     try {
       return structuredResult(await infolegSearch(input));
-    } catch (error) {
-      return errorResult(error);
-    }
-  });
-
-  server.registerTool("afip_cuit_lookup", {
-    description: "Consulta datos tributarios de un CUIT/CUIL en el padrón de AFIP (~6M contribuyentes). Retorna denominación, estado en Ganancias/IVA/Monotributo, categoría, si es empleador. IMPORTANTE: los datos provienen del padrón público de ARCA que se actualiza semanalmente, por lo que pueden tener hasta 7 días de demora respecto a cambios recientes en la situación tributaria del contribuyente.",
-    inputSchema: {
-      cuit: z.string().describe("CUIT o CUIL a consultar (11 dígitos, con o sin guiones)"),
-    },
-    outputSchema: afipCuitLookupOutput,
-    _meta: toolMeta({ executeUsd: "0.001" }),
-  }, async (input) => {
-    try {
-      return structuredResult(await afipCuitLookup(input));
     } catch (error) {
       return errorResult(error);
     }

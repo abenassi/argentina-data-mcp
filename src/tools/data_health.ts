@@ -3,7 +3,7 @@ import { pool } from "../db/pool.js";
 export interface DataHealthResult {
   fuentes: {
     nombre: string;
-    estado: "healthy" | "degraded" | "down";
+    estado: "healthy" | "degraded" | "down" | "disabled";
     ultima_actualizacion: string | null;
     ultimo_dato: string | null;
     registros: number;
@@ -18,8 +18,11 @@ const TABLE_COUNTS: Record<string, string> = {
   bcra: "bcra_variables",
   indec: "indec_series",
   infoleg: "infoleg_normas",
-  boletin_oficial: "boletin_oficial",
-  afip: "afip_cuit_cache",
+};
+
+const DISABLED_SOURCES: Record<string, string> = {
+  afip: "Desactivada temporalmente — las APIs públicas de consulta CUIT están discontinuadas",
+  boletin_oficial: "Desactivada temporalmente — en proceso de reescritura con endpoint correcto",
 };
 
 export async function dataHealth(): Promise<DataHealthResult> {
@@ -79,9 +82,23 @@ export async function dataHealth(): Promise<DataHealthResult> {
     });
   }
 
+  // Add disabled sources
+  for (const [source, reason] of Object.entries(DISABLED_SOURCES)) {
+    fuentes.push({
+      nombre: source,
+      estado: "disabled",
+      ultima_actualizacion: null,
+      ultimo_dato: null,
+      registros: 0,
+      error: reason,
+    });
+  }
+
   const healthy = fuentes.filter((f) => f.estado === "healthy").length;
-  const total = fuentes.length;
-  const resumen = `${healthy}/${total} fuentes healthy. ${fuentes.filter(f => f.estado === "down").map(f => f.nombre).join(", ") || "Ninguna"} caída(s).`;
+  const active = fuentes.filter((f) => f.estado !== "disabled").length;
+  const disabled = fuentes.filter((f) => f.estado === "disabled").length;
+  const down = fuentes.filter(f => f.estado === "down").map(f => f.nombre).join(", ");
+  const resumen = `${healthy}/${active} fuentes activas healthy. ${down || "Ninguna"} caída(s). ${disabled} desactivada(s).`;
 
   return { fuentes, resumen };
 }
