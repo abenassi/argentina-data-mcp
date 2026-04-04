@@ -29,6 +29,30 @@ async function runCollector(name: string, fn: () => Promise<CollectorResult>) {
   }
 }
 
+/** Ping the MCP HTTP server's /health endpoint and log result to uptime_log */
+async function checkUptime() {
+  const port = process.env.MCP_HTTP_PORT || "3100";
+  try {
+    const res = await fetch(`http://localhost:${port}/health`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await res.json() as { status: string; dbLatencyMs?: number };
+    await pool.query(
+      `INSERT INTO uptime_log (status, db_latency_ms, created_at) VALUES ($1, $2, NOW())`,
+      [data.status === "ok" ? "ok" : "down", data.dbLatencyMs || null]
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${new Date().toISOString()}] uptime: DOWN — ${msg}`);
+    try {
+      await pool.query(
+        `INSERT INTO uptime_log (status, error_message, created_at) VALUES ('down', $1, NOW())`,
+        [msg]
+      );
+    } catch { /* DB might be down too */ }
+  }
+}
+
 async function main() {
   console.log(`[${new Date().toISOString()}] Argentina Data Collector Runner starting...`);
 
@@ -57,12 +81,17 @@ async function main() {
   // Boletín Oficial: weekdays at 8 AM (scrapes daily section pages)
   cron.schedule("0 8 * * 1-5", () => runCollector("boletin", collectBoletin));
 
+  // Uptime check: every 5 minutes — pings /health and logs to uptime_log
+  cron.schedule("*/5 * * * *", checkUptime);
+  checkUptime(); // Initial check
+
   console.log("Scheduled collectors:");
   console.log("  dolar:           every 15 minutes");
   console.log("  bcra:            every hour");
   console.log("  indec:           daily at 03:00");
   console.log("  dolar_historico: daily at 06:00");
   console.log("  boletin:         weekdays at 08:00");
+  console.log("  uptime:          every 5 minutes");
   console.log("\nCollector runner is active. Press Ctrl+C to stop.");
 }
 

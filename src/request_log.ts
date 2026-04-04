@@ -14,6 +14,40 @@ export function logToolCall(
   ).catch(() => { /* logging must never break tool execution */ });
 }
 
+/** Uptime stats from uptime_log table */
+export async function getUptimeStats(): Promise<{
+  checks_total: number;
+  checks_ok: number;
+  uptime_pct: number;
+  avg_db_latency_ms: number;
+  last_downtime: string | null;
+}> {
+  const [stats, lastDown] = await Promise.all([
+    pool.query(`
+      SELECT
+        COUNT(*)::int AS checks_total,
+        COUNT(*) FILTER (WHERE status = 'ok')::int AS checks_ok,
+        CASE WHEN COUNT(*) > 0
+          THEN ROUND(COUNT(*) FILTER (WHERE status = 'ok')::numeric / COUNT(*)::numeric * 100, 2)
+          ELSE 100 END AS uptime_pct,
+        COALESCE(AVG(db_latency_ms) FILTER (WHERE status = 'ok')::int, 0) AS avg_db_latency_ms
+      FROM uptime_log
+    `),
+    pool.query(`
+      SELECT created_at FROM uptime_log WHERE status = 'down' ORDER BY created_at DESC LIMIT 1
+    `),
+  ]);
+
+  const row = stats.rows[0];
+  return {
+    checks_total: row.checks_total,
+    checks_ok: row.checks_ok,
+    uptime_pct: Number(row.uptime_pct),
+    avg_db_latency_ms: row.avg_db_latency_ms,
+    last_downtime: lastDown.rows[0]?.created_at?.toISOString() || null,
+  };
+}
+
 /** Usage stats summary for data_health / diagnostics */
 export async function getUsageStats(): Promise<{
   total_calls: number;
