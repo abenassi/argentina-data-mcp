@@ -35,8 +35,18 @@ export interface BcraTipoCambioInput {
 export interface BcraTipoCambioResult {
   datos: { fecha: string; valor: number; variable: string }[];
   fuente: string;
+  fuente_url: string;
   actualizado_al: string;
   freshness: "current" | "stale" | "unknown";
+}
+
+const INDEC_VARS = new Set(["inflacion_mensual", "inflacion_interanual"]);
+
+function fuenteForVariable(variable: string): { fuente: string; fuente_url: string } {
+  if (INDEC_VARS.has(variable)) {
+    return { fuente: "INDEC - IPC", fuente_url: "https://www.indec.gob.ar/indec/web/Nivel4-Tema-3-5-31" };
+  }
+  return { fuente: "BCRA - Principales variables", fuente_url: "https://www.bcra.gob.ar/PublicacionesEstadisticas/Principales_variables.asp" };
 }
 
 export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTipoCambioResult> {
@@ -71,7 +81,7 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
           valor: Number(r.valor),
           variable: variableName,
         })),
-        fuente: "postgresql",
+        ...fuenteForVariable(variableName),
         actualizado_al: maxFecha.toISOString().split("T")[0],
         freshness: ageHours < 72 ? "current" : "stale",
       };
@@ -85,7 +95,7 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
   const data = await fetchJSON<BCRAv4Response>(url);
 
   if (!data.results || data.results.length === 0 || !data.results[0].detalle || data.results[0].detalle.length === 0) {
-    return { datos: [], fuente: "api_directa", actualizado_al: fechaHasta, freshness: "unknown" };
+    return { datos: [], ...fuenteForVariable(variableName), actualizado_al: fechaHasta, freshness: "unknown" };
   }
 
   const detalle = data.results[0].detalle;
@@ -95,7 +105,7 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
       valor: r.valor,
       variable: variableName,
     })),
-    fuente: "api_directa",
+    ...fuenteForVariable(variableName),
     actualizado_al: detalle[0].fecha,
     freshness: "current",
   };

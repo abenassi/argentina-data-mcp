@@ -38,7 +38,7 @@ describe("bcra_tipo_cambio", () => {
     const result = await bcraTipoCambio({});
     expect(result.datos).toHaveLength(2);
     expect(result.datos[0]).toMatchObject({ fecha: "2025-03-28", valor: 1075.5, variable: "dolar_oficial" });
-    expect(result.fuente).toBe("api_directa");
+    expect(result.fuente).toBe("BCRA - Principales variables");
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("api.bcra.gob.ar");

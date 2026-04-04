@@ -26,6 +26,7 @@ export interface DolarCotizacion {
 export interface DolarCotizacionesResult {
   cotizaciones: DolarCotizacion[];
   fuente: string;
+  fuente_url: string;
   actualizado_al: string;
   freshness: "current" | "stale" | "unknown";
 }
@@ -74,7 +75,8 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
           variacion: r.variacion ? Number(r.variacion) : 0,
           spread_vs_oficial: null,
         }))),
-        fuente: "postgresql",
+        fuente: "Ámbito Financiero (via DolarAPI)",
+        fuente_url: "https://dolarapi.com",
         actualizado_al: maxFecha.toISOString(),
         freshness: collectorAgeMinutes < 60 ? "current" : "stale",
       };
@@ -96,7 +98,8 @@ export async function dolarCotizaciones(): Promise<DolarCotizacionesResult> {
       variacion: item.variacion,
       spread_vs_oficial: null,
     }))),
-    fuente: "api_directa",
+    fuente: "Ámbito Financiero (via DolarAPI)",
+    fuente_url: "https://dolarapi.com",
     actualizado_al: now,
     freshness: "current",
   };

@@ -42,7 +42,7 @@ describe("boletin_oficial_search", () => {
     expect(result.resultados[0].organismo).toContain("CALIDAD");
     expect(result.resultados[0].tipo_norma).toBe("Disposición 51/2026");
     expect(result.resultados[0].seccion).toBe("primera");
-    expect(result.fuente).toBe("postgresql");
+    expect(result.fuente).toBe("Boletín Oficial de la República Argentina");
   });
 
   it("filtra por sección", async () => {
@@ -68,7 +68,7 @@ describe("boletin_oficial_search", () => {
     ]);
 
     const result = await boletinOficialSearch({ query: "banco central" });
-    expect(result.fuente).toBe("api_directa");
+    expect(result.fuente).toBe("Boletín Oficial de la República Argentina");
     expect(result.resultados).toHaveLength(1);
     expect(result.resultados[0].organismo).toBe("BANCO CENTRAL");
   });
@@ -89,6 +89,6 @@ describe("boletin_oficial_search", () => {
 
     const result = await boletinOficialSearch({ query: "zzznoexiste" });
     expect(result.resultados).toEqual([]);
-    expect(result.fuente).toBe("no_disponible");
+    expect(result.fuente).toBe("Boletín Oficial de la República Argentina");
   });
 });

@@ -42,7 +42,7 @@ describe("infoleg_search", () => {
     expect(result.resultados[0].tipo).toBe("Ley");
     expect(result.resultados[0].numero).toBe("27610");
     expect(result.resultados[0].url).toContain("123456");
-    expect(result.fuente).toBe("postgresql_fts");
+    expect(result.fuente).toBe("InfoLeg - Ministerio de Justicia");
   });
 
   it("filtra por tipo de norma", async () => {

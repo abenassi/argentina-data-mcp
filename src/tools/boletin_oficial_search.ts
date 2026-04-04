@@ -26,6 +26,7 @@ export interface BoletinOficialSearchResult {
   }[];
   total: number;
   fuente: string;
+  fuente_url: string;
   freshness: "current" | "stale" | "unknown";
 }
 
@@ -80,7 +81,8 @@ export async function boletinOficialSearch(input: BoletinOficialSearchInput): Pr
           url: r.url,
         })),
         total: result.rows.length,
-        fuente: "postgresql",
+        fuente: "Boletín Oficial de la República Argentina",
+        fuente_url: "https://www.boletinoficial.gob.ar",
         freshness: "current",
       };
     }
@@ -110,14 +112,16 @@ export async function boletinOficialSearch(input: BoletinOficialSearchInput): Pr
         url: a.url,
       })),
       total: filtered.length,
-      fuente: "api_directa",
+      fuente: "Boletín Oficial de la República Argentina",
+      fuente_url: "https://www.boletinoficial.gob.ar",
       freshness: "current",
     };
   } catch {
     return {
       resultados: [],
       total: 0,
-      fuente: "no_disponible",
+      fuente: "Boletín Oficial de la República Argentina",
+      fuente_url: "https://www.boletinoficial.gob.ar",
       freshness: "unknown",
     };
   }

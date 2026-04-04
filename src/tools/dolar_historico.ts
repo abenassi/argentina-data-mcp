@@ -11,6 +11,7 @@ export interface DolarHistoricoResult {
   datos: { fecha: string; compra: number | null; venta: number | null }[];
   registros: number;
   fuente: string;
+  fuente_url: string;
   freshness: "current" | "stale" | "unknown";
 }
 
@@ -58,7 +59,8 @@ export async function dolarHistorico(input: DolarHistoricoInput): Promise<DolarH
       venta: r.venta ? Number(r.venta) : null,
     })),
     registros: result.rows.length,
-    fuente: "postgresql (ámbito financiero)",
+    fuente: "Ámbito Financiero",
+    fuente_url: "https://mercados.ambito.com",
     freshness: ageHours < 48 ? "current" : "stale",
   };
 }

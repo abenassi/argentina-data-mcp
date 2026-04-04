@@ -27,7 +27,8 @@ const dolarCotizacionesOutput = {
     variacion: z.number().describe("Daily change percentage"),
     spread_vs_oficial: z.number().nullable().describe("Spread vs official rate in percentage points"),
   })).describe("Array of dollar exchange rates"),
-  fuente: z.string().describe("Data source: postgresql or api_directa"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   actualizado_al: z.string().describe("Data timestamp (ISO 8601)"),
   freshness: freshnessSchema,
 };
@@ -38,7 +39,8 @@ const bcraTipoCambioOutput = {
     valor: z.number().describe("Variable value"),
     variable: z.string().describe("Variable name"),
   })).describe("Time series data points"),
-  fuente: z.string().describe("Data source: postgresql or api_directa"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   actualizado_al: z.string().describe("Most recent data date (YYYY-MM-DD)"),
   freshness: freshnessSchema,
 };
@@ -53,7 +55,8 @@ const infolegSearchOutput = {
     url: z.string().describe("InfoLeg URL to view the full norm text"),
   })).describe("Search results ranked by relevance and recency"),
   total: z.number().describe("Number of results returned"),
-  fuente: z.string().describe("Data source: postgresql_fts"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   freshness: freshnessSchema,
 };
 
@@ -67,7 +70,8 @@ const boletinOficialSearchOutput = {
     url: z.string().describe("URL to view the full aviso on boletinoficial.gob.ar"),
   })).describe("Search results ranked by date and relevance"),
   total: z.number().describe("Number of results returned"),
-  fuente: z.string().describe("Data source: postgresql or api_directa"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   freshness: freshnessSchema,
 };
 
@@ -79,7 +83,8 @@ const indecStatsOutput = {
   variacion: z.number().optional().describe("Month-over-month change in percentage"),
   actualizado_al: z.string().describe("Data coverage end date (YYYY-MM-DD)"),
   is_updated: z.boolean().describe("Whether the series is up-to-date per datos.gob.ar"),
-  fuente: z.string().describe("Data source: postgresql or api_directa"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   freshness: freshnessSchema,
 };
 
@@ -92,7 +97,8 @@ const dolarHistoricoOutput = {
     venta: z.number().nullable().describe("Sell price in ARS"),
   })).describe("Historical daily exchange rates sorted chronologically"),
   registros: z.number().describe("Number of data points returned"),
-  fuente: z.string().describe("Data source: postgresql (ámbito financiero)"),
+  fuente: z.string().describe("Original data source name"),
+  fuente_url: z.string().describe("URL of the original data source"),
   freshness: freshnessSchema,
 };
 

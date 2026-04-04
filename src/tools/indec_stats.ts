@@ -44,6 +44,7 @@ export interface IndecStatsResult {
   actualizado_al: string;
   is_updated: boolean;
   fuente: string;
+  fuente_url: string;
   freshness: "current" | "stale" | "unknown";
 }
 
@@ -82,7 +83,8 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
         variacion: variacion !== undefined ? Math.round(variacion * 100) / 100 : undefined,
         actualizado_al: fechaStr,
         is_updated: latest.is_updated,
-        fuente: "postgresql",
+        fuente: "INDEC - Series de Tiempo",
+        fuente_url: "https://datos.gob.ar/series/api/",
         freshness: ageMonths < 3 ? "current" : "stale",
       };
     }
@@ -137,7 +139,8 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
     variacion: variacion !== undefined ? Math.round(variacion * 100) / 100 : undefined,
     actualizado_al: timeIndexEnd,
     is_updated: isUpdated,
-    fuente: "api_directa",
+    fuente: "INDEC - Series de Tiempo",
+    fuente_url: "https://datos.gob.ar/series/api/",
     freshness: isUpdated ? "current" : "stale",
   };
 }

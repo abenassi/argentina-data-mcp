@@ -37,7 +37,7 @@ describe("dolar_cotizaciones", () => {
     expect(result.cotizaciones[1].tipo).toBe("blue");
     expect(result.cotizaciones[0].spread_vs_oficial).toBe(0);
     expect(result.cotizaciones[1].spread_vs_oficial).toBeCloseTo(-0.76, 1);
-    expect(result.fuente).toBe("api_directa");
+    expect(result.fuente).toBe("Ámbito Financiero (via DolarAPI)");
     expect(result.freshness).toBe("current");
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;

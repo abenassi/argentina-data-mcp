@@ -19,6 +19,7 @@ export interface InfolegSearchResult {
   }[];
   total: number;
   fuente: string;
+  fuente_url: string;
   freshness: "current" | "stale" | "unknown";
 }
 
@@ -83,7 +84,8 @@ export async function infolegSearch(input: InfolegSearchInput): Promise<InfolegS
         url: `http://servicios.infoleg.gob.ar/infolegInternet/verNorma.do?id=${r.id_norma}`,
       })),
       total: result.rowCount || 0,
-      fuente: "postgresql_fts",
+      fuente: "InfoLeg - Ministerio de Justicia",
+      fuente_url: "http://www.infoleg.gob.ar",
       freshness: totalInDb > 0 ? "current" : "unknown",
     };
   } catch (error) {

@@ -42,7 +42,7 @@ describe("indec_stats", () => {
     expect(result.periodo).toBe("2025-02-01");
     expect(result.variacion).toBeDefined();
     expect(result.variacion).toBeCloseTo(3.09, 1);
-    expect(result.fuente).toBe("api_directa");
+    expect(result.fuente).toBe("INDEC - Series de Tiempo");
     expect(result.is_updated).toBe(true);
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
