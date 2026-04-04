@@ -34,6 +34,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.get("/.well-known/oauth-authorization-server", metadataHandler(BASE_URL));
 app.get("/authorize", authorizeHandler);
+app.post("/authorize", authorizeHandler);
 app.post("/token", tokenHandler);
 app.post("/register", registerHandler);
 

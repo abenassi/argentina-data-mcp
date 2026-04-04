@@ -34,33 +34,84 @@ export function metadataHandler(baseUrl: string) {
   };
 }
 
-/** OAuth authorization endpoint — immediate redirect with code */
+/** OAuth authorization endpoint — shows login form or processes it */
 export function authorizeHandler(req: Request, res: Response): void {
-  const clientId = (req.query.client_id as string) || "";
-  const redirectUri = (req.query.redirect_uri as string) || "";
-  const state = (req.query.state as string) || "";
+  // Read params from query (GET) or body (POST form)
+  const clientId = (req.query.client_id as string) || req.body?.client_id || "";
+  const redirectUri = (req.query.redirect_uri as string) || req.body?.redirect_uri || "";
+  const state = (req.query.state as string) || req.body?.state || "";
 
   if (!clientId || !redirectUri) {
     res.status(400).json({ error: "invalid_request", error_description: "client_id and redirect_uri required" });
     return;
   }
 
-  // Look up the client's secret from dynamic registration
-  const client = registeredClients.get(clientId);
-  const secret = client?.clientSecret || "";
+  // If API key was submitted via form POST, validate and redirect with code
+  const apiKey = req.body?.api_key as string | undefined;
+  if (apiKey) {
+    if (!validateApiKey(apiKey)) {
+      res.status(200).send(authorizeFormHtml(clientId, redirectUri, state, "API key inválida. Revisá e intentá de nuevo."));
+      return;
+    }
 
-  // Generate an authorization code
-  const code = randomUUID();
-  authCodes.set(code, {
-    clientId,
-    secret,
-    expiresAt: Date.now() + 300_000, // 5 minutes
-  });
+    const code = randomUUID();
+    authCodes.set(code, {
+      clientId,
+      secret: apiKey,
+      expiresAt: Date.now() + 300_000,
+    });
 
-  // Redirect back to the client with the code
-  const sep = redirectUri.includes("?") ? "&" : "?";
-  const location = `${redirectUri}${sep}code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
-  res.redirect(302, location);
+    const sep = redirectUri.includes("?") ? "&" : "?";
+    const location = `${redirectUri}${sep}code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+    res.redirect(302, location);
+    return;
+  }
+
+  // GET request — show login form
+  res.status(200).send(authorizeFormHtml(clientId, redirectUri, state));
+}
+
+/** Renders the HTML login form for OAuth authorization */
+function authorizeFormHtml(clientId: string, redirectUri: string, state: string, error?: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Argentina Data MCP — Autorización</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a1628; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: #1e293b; border-radius: 12px; padding: 2rem; max-width: 420px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+    h1 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem; }
+    label { display: block; font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.5rem; }
+    input[type="password"] { width: 100%; padding: 0.625rem 0.75rem; border: 1px solid #334155; border-radius: 8px; background: #0f172a; color: #e2e8f0; font-size: 0.95rem; }
+    input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.3); }
+    button { width: 100%; margin-top: 1rem; padding: 0.625rem; border: none; border-radius: 8px; background: #3b82f6; color: white; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    .error { background: #7f1d1d; color: #fca5a5; padding: 0.625rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; }
+    .flag { font-size: 2rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="flag">🇦🇷</div>
+    <h1>Argentina Data MCP</h1>
+    <p class="subtitle">Ingresá tu API key para conectar</p>
+    ${error ? `<div class="error">${esc(error)}</div>` : ""}
+    <form method="POST">
+      <input type="hidden" name="client_id" value="${esc(clientId)}">
+      <input type="hidden" name="redirect_uri" value="${esc(redirectUri)}">
+      <input type="hidden" name="state" value="${esc(state)}">
+      <label for="api_key">API Key</label>
+      <input type="password" id="api_key" name="api_key" placeholder="adm_..." required autofocus>
+      <button type="submit">Autorizar</button>
+    </form>
+  </div>
+</body>
+</html>`;
 }
 
 /** OAuth token endpoint — exchange code or client credentials for access token */
