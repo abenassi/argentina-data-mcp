@@ -7,9 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools/register.js";
-import { createContextMiddleware } from "@ctxprotocol/sdk";
 import { validateApiKey, getKeyRole } from "./auth/api-keys.js";
-import { isProtectedMcpMethod } from "@ctxprotocol/sdk";
 import type { ApiKeyRole } from "./auth/api-keys.js";
 import { metadataHandler, authorizeHandler, tokenHandler, registerHandler } from "./auth/oauth.js";
 import { pool } from "./db/pool.js";
@@ -42,25 +40,23 @@ app.post("/authorize", authorizeHandler);
 app.post("/token", tokenHandler);
 app.post("/register", registerHandler);
 
-// API key middleware — extract role from API key on ALL requests (before Context Protocol auth)
+// API key middleware — extract role for tool lifecycle filtering (alpha/beta/stable).
+// Auth enforcement is disabled while listing price is $0.00 (free tool).
+// Per Context Protocol docs: "Free tools work out of the box. Add middleware later to monetize."
+// Re-enable createContextMiddleware() when setting a paid price.
 app.use("/mcp", (req, _res, next) => {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
   if (token) {
     const role = getKeyRole(token);
     if (role) {
       (req as any).apiKeyRole = role;
-      // If valid API key on a protected method, skip Context Protocol JWT check
-      if (req.body?.method && isProtectedMcpMethod(req.body.method) && validateApiKey(token)) {
+      if (validateApiKey(token)) {
         (req as any).authSource = "api-key";
-        return next();
       }
     }
   }
   next();
 });
-
-// Context Protocol auth — protects tools/call, allows discovery
-app.use("/mcp", createContextMiddleware());
 
 // Health check — returns 200 if PostgreSQL is reachable, 503 otherwise
 app.get("/health", async (_req, res) => {
