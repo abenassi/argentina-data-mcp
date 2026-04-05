@@ -3,6 +3,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import express from "express";
+import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -30,6 +31,7 @@ function createServer(role: ApiKeyRole = "user"): McpServer {
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // OAuth 2.1 endpoints (must be before auth middleware)
