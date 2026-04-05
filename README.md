@@ -6,9 +6,9 @@ MCP server que expone datos argentinos en tiempo real para agentes de IA: cotiza
 
 Agregá este MCP server como conector HTTP en tu cuenta de Claude:
 
-**URL**: `https://dimension-gras-announcements-mud.trycloudflare.com/mcp`
+**URL**: `https://argentinadata.mymcps.dev/mcp`
 
-> Nota: esta URL es temporal (Cloudflare quick tunnel). Para una URL permanente, se requiere un dominio propio.
+**Status page**: [https://stats.uptimerobot.com/lTLP3Efkud](https://stats.uptimerobot.com/lTLP3Efkud)
 
 ## Tools disponibles
 
