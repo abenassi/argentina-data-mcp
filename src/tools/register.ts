@@ -38,7 +38,7 @@ const TOOL_LIFECYCLE: Record<string, ToolLifecycle> = {
   list_indec_indicadores: "stable",
   list_dolar_tipos: "stable",
   legislacion_tributaria: "stable",
-  analisis_economico: "stable",
+  analisis_economico: "alpha",
   feriados_nacionales: "stable",
   afip_search_by_name: "stable",
 };
