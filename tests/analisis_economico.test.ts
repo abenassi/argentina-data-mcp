@@ -109,6 +109,58 @@ describe("analisis_economico — brecha_cambiaria", () => {
   });
 });
 
+describe("analisis_economico — inflacion_tendencia", () => {
+  it("calcula tendencia de inflación con tasa anualizada", async () => {
+    // IPC series (DESC order from DB, reversed in fetchSeriesFromDb)
+    mockQuery.mockResolvedValueOnce(makeDbRows("ipc", [
+      ["2025-12-01", 1120],
+      ["2025-11-01", 1080],
+      ["2025-10-01", 1040],
+      ["2025-09-01", 1000],
+      ["2025-08-01", 970],
+      ["2025-07-01", 940],
+      ["2025-06-01", 910],
+    ]));
+
+    const result = await analisisEconomico({ analisis: "inflacion_tendencia", meses: 6 });
+    expect(result.analisis).toBe("inflacion_tendencia");
+    expect(result.fuentes).toContain("INDEC — Índice de Precios al Consumidor (IPC)");
+    const resumen = (result.datos as any).resumen;
+    expect(resumen.inflacion_mensual_actual_pct).toBeGreaterThan(0);
+    expect(resumen.inflacion_anualizada_actual_pct).toBeGreaterThan(0);
+    expect(resumen.meses_analizados).toBe(6);
+    const evolucion = (result.datos as any).evolucion;
+    expect(evolucion).toHaveLength(6);
+    expect(evolucion[0].tasa_anualizada_pct).toBeDefined();
+  });
+});
+
+describe("analisis_economico — reservas_tendencia", () => {
+  it("calcula tendencia de reservas BCRA", async () => {
+    // Reservas — ascending order from DB
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        { fecha: new Date("2025-10-01"), valor: 27000 },
+        { fecha: new Date("2025-10-06"), valor: 27100 },
+        { fecha: new Date("2025-10-13"), valor: 27300 },
+        { fecha: new Date("2025-10-20"), valor: 27500 },
+        { fecha: new Date("2025-10-27"), valor: 27800 },
+        { fecha: new Date("2025-11-03"), valor: 28000 },
+        { fecha: new Date("2025-11-10"), valor: 28200 },
+      ],
+    });
+
+    const result = await analisisEconomico({ analisis: "reservas_tendencia", meses: 3 });
+    expect(result.analisis).toBe("reservas_tendencia");
+    expect(result.fuentes).toContain("BCRA — Reservas Internacionales");
+    const resumen = (result.datos as any).resumen;
+    expect(resumen.reservas_actual_musd).toBe(28200);
+    expect(resumen.variacion_musd).toBeGreaterThan(0);
+    expect(resumen.variacion_pct).toBeGreaterThan(0);
+    expect(result.conclusion).toContain("reservas");
+  });
+});
+
 describe("analisis_economico — validation", () => {
   it("lanza error con análisis no reconocido", async () => {
     await expect(analisisEconomico({ analisis: "inexistente" }))

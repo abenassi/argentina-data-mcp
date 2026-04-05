@@ -466,9 +466,9 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
 
   if (shouldRegister("analisis_economico", role))
   server.registerTool("analisis_economico", {
-    description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación, combina IPC + salarios INDEC), brecha_cambiaria (spread blue/oficial/MEP histórico con tendencia). Devuelve análisis con conclusión, no solo datos crudos.",
+    description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación), brecha_cambiaria (spread blue/oficial/MEP), inflacion_tendencia (IPC mensual con tasa anualizada), reservas_tendencia (reservas internacionales BCRA). Devuelve análisis con conclusión.",
     inputSchema: {
-      analisis: z.string().default("brecha_cambiaria").describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria"),
+      analisis: z.string().default("brecha_cambiaria").describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria, inflacion_tendencia, reservas_tendencia"),
       meses: z.number().optional().describe("Cantidad de meses a analizar (default: 12, max: 24)"),
     },
     outputSchema: analisisEconomicoOutput,

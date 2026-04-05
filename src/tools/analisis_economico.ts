@@ -2,7 +2,7 @@
 import { pool } from "../db/pool.js";
 import { fetchJSON } from "../utils/http.js";
 
-export type AnalisisMode = "poder_adquisitivo" | "brecha_cambiaria";
+export type AnalisisMode = "poder_adquisitivo" | "brecha_cambiaria" | "inflacion_tendencia" | "reservas_tendencia";
 
 export interface AnalisisInput {
   analisis: string;
@@ -128,12 +128,22 @@ async function analizarPoderAdquisitivo(meses: number): Promise<AnalisisResult> 
   const cambioIpc = Math.round((ultimo.ipc_idx - 100) * 100) / 100;
 
   let conclusion: string;
-  if (cambioReal > 2) {
-    conclusion = `Los salarios ganaron ${cambioReal}% de poder adquisitivo real en el período. Subieron ${cambioNominal}% nominal vs ${cambioIpc}% de inflación (IPC). Los trabajadores mejoraron su capacidad de compra.`;
-  } else if (cambioReal < -2) {
-    conclusion = `Los salarios perdieron ${Math.abs(cambioReal)}% de poder adquisitivo real en el período. Subieron ${cambioNominal}% nominal pero la inflación fue ${cambioIpc}% (IPC). Los trabajadores perdieron capacidad de compra.`;
+  const absReal = Math.abs(cambioReal);
+  if (cambioReal > 5) {
+    conclusion = `Los salarios ganaron ${cambioReal}% de poder adquisitivo real. Subieron ${cambioNominal}% nominal vs ${cambioIpc}% de inflación. Mejora significativa del poder de compra.`;
+  } else if (cambioReal > 1) {
+    conclusion = `Los salarios ganaron levemente ${cambioReal}% de poder adquisitivo real. Subieron ${cambioNominal}% nominal vs ${cambioIpc}% de inflación. Leve mejora.`;
+  } else if (cambioReal >= -1) {
+    conclusion = `Los salarios prácticamente mantuvieron su poder adquisitivo (${cambioReal > 0 ? "+" : ""}${cambioReal}%). Subieron ${cambioNominal}% nominal vs ${cambioIpc}% de inflación. Variación marginal.`;
+  } else if (cambioReal >= -5) {
+    conclusion = `Los salarios perdieron levemente ${absReal}% de poder adquisitivo real. Subieron ${cambioNominal}% nominal pero la inflación fue ${cambioIpc}%. Deterioro leve del poder de compra.`;
   } else {
-    conclusion = `Los salarios mantuvieron su poder adquisitivo real (variación: ${cambioReal}%). Subieron ${cambioNominal}% nominal vs ${cambioIpc}% de inflación (IPC). Prácticamente neutro.`;
+    conclusion = `Los salarios perdieron ${absReal}% de poder adquisitivo real. Subieron ${cambioNominal}% nominal pero la inflación fue ${cambioIpc}%. Deterioro significativo del poder de compra.`;
+  }
+
+  // Note data coverage if less than requested
+  if (evolucion.length < meses) {
+    conclusion += ` (Nota: datos disponibles solo para ${evolucion.length} meses de los ${meses} solicitados — INDEC publica con rezago.)`;
   }
 
   return {
@@ -244,6 +254,156 @@ async function analizarBrechaCambiaria(meses: number): Promise<AnalisisResult> {
   };
 }
 
+// --- Analysis: Inflación Tendencia ---
+
+async function analizarInflacionTendencia(meses: number): Promise<AnalisisResult> {
+  const IPC_ID = "148.3_INIVELNAL_DICI_M_26";
+
+  let ipcSeries: [string, number][];
+  let fuente: string;
+
+  try {
+    ipcSeries = await fetchSeriesFromDb(IPC_ID, meses + 1); // +1 for MoM calc
+    fuente = "postgresql";
+  } catch {
+    try {
+      const apiData = await fetchSeriesFromApi([IPC_ID], meses + 1);
+      ipcSeries = apiData.get(IPC_ID) || [];
+      fuente = "api_directa";
+    } catch {
+      throw new Error("No se pudieron obtener datos de IPC");
+    }
+  }
+
+  if (ipcSeries.length < 3) {
+    throw new Error("Datos insuficientes para calcular tendencia de inflación");
+  }
+
+  // Calculate MoM and annualized rates
+  const evolucion = [];
+  for (let i = 1; i < ipcSeries.length; i++) {
+    const [fecha, valor] = ipcSeries[i];
+    const [, valorAnterior] = ipcSeries[i - 1];
+    const mom = ((valor - valorAnterior) / valorAnterior) * 100;
+    const anualizada = (Math.pow(1 + mom / 100, 12) - 1) * 100;
+    evolucion.push({
+      fecha,
+      ipc: Math.round(valor * 100) / 100,
+      variacion_mensual_pct: Math.round(mom * 100) / 100,
+      tasa_anualizada_pct: Math.round(anualizada * 100) / 100,
+    });
+  }
+
+  const tasas = evolucion.map(e => e.variacion_mensual_pct);
+  const promedio = Math.round(tasas.reduce((a, b) => a + b, 0) / tasas.length * 100) / 100;
+  const ultima = tasas[tasas.length - 1];
+  const primera = tasas[0];
+  const tendencia = Math.round((ultima - primera) * 100) / 100;
+  const anualizadaActual = evolucion[evolucion.length - 1].tasa_anualizada_pct;
+
+  let conclusion: string;
+  if (tendencia < -0.5) {
+    conclusion = `La inflación muestra tendencia descendente. Última medición: ${ultima}% mensual (${anualizadaActual}% anualizada). Promedio del período: ${promedio}% mensual. La tasa bajó ${Math.abs(tendencia)} pp desde el inicio del período.`;
+  } else if (tendencia > 0.5) {
+    conclusion = `La inflación muestra tendencia ascendente. Última medición: ${ultima}% mensual (${anualizadaActual}% anualizada). Promedio del período: ${promedio}% mensual. La tasa subió ${tendencia} pp desde el inicio.`;
+  } else {
+    conclusion = `La inflación se mantiene relativamente estable. Última medición: ${ultima}% mensual (${anualizadaActual}% anualizada). Promedio del período: ${promedio}% mensual.`;
+  }
+
+  return {
+    analisis: "inflacion_tendencia",
+    periodo: { desde: evolucion[0].fecha, hasta: evolucion[evolucion.length - 1].fecha },
+    datos: {
+      evolucion,
+      resumen: {
+        inflacion_mensual_actual_pct: ultima,
+        inflacion_anualizada_actual_pct: anualizadaActual,
+        inflacion_mensual_promedio_pct: promedio,
+        tendencia_pp: tendencia,
+        meses_analizados: evolucion.length,
+      },
+    },
+    conclusion,
+    confianza: fuente === "postgresql" && evolucion.length >= 6 ? "alta" : "media",
+    fuentes: ["INDEC — Índice de Precios al Consumidor (IPC)"],
+  };
+}
+
+// --- Analysis: Reservas Tendencia ---
+
+async function fetchBcraFromDb(idVariable: number, meses: number): Promise<[string, number][]> {
+  const result = await pool.query(
+    `SELECT fecha, valor FROM bcra_variables
+     WHERE id_variable = $1 AND fecha >= NOW() - INTERVAL '${meses} months'
+     ORDER BY fecha ASC`,
+    [idVariable]
+  );
+  return result.rows.map((r: any) => [
+    r.fecha.toISOString().split("T")[0],
+    Number(r.valor),
+  ] as [string, number]);
+}
+
+async function analizarReservasTendencia(meses: number): Promise<AnalisisResult> {
+  let reservas: [string, number][];
+
+  try {
+    reservas = await fetchBcraFromDb(1, meses); // variable 1 = reservas
+  } catch {
+    throw new Error("Datos de reservas BCRA no disponibles");
+  }
+
+  if (reservas.length < 5) {
+    throw new Error("Datos insuficientes para analizar tendencia de reservas");
+  }
+
+  // Sample weekly to reduce output
+  const sampled = reservas.filter((_, i) =>
+    i === 0 || i === reservas.length - 1 || i % 5 === 0
+  );
+
+  const evolucion = sampled.map(([fecha, valor]) => ({
+    fecha,
+    reservas_musd: Math.round(valor),
+  }));
+
+  const primera = reservas[0][1];
+  const ultima = reservas[reservas.length - 1][1];
+  const variacion = Math.round(ultima - primera);
+  const variacionPct = Math.round(((ultima - primera) / primera) * 10000) / 100;
+  const maxVal = Math.max(...reservas.map(([, v]) => v));
+  const minVal = Math.min(...reservas.map(([, v]) => v));
+
+  let conclusion: string;
+  if (variacionPct > 5) {
+    conclusion = `Las reservas internacionales del BCRA crecieron de USD ${Math.round(primera)}M a USD ${Math.round(ultima)}M (+${variacionPct}%, +USD ${variacion}M). Máximo: USD ${Math.round(maxVal)}M. Tendencia positiva.`;
+  } else if (variacionPct < -5) {
+    conclusion = `Las reservas internacionales del BCRA cayeron de USD ${Math.round(primera)}M a USD ${Math.round(ultima)}M (${variacionPct}%, USD ${variacion}M). Mínimo: USD ${Math.round(minVal)}M. Tendencia negativa.`;
+  } else {
+    conclusion = `Las reservas internacionales del BCRA se mantuvieron estables: USD ${Math.round(ultima)}M (variación: ${variacionPct}%). Rango: USD ${Math.round(minVal)}M — USD ${Math.round(maxVal)}M.`;
+  }
+
+  return {
+    analisis: "reservas_tendencia",
+    periodo: { desde: reservas[0][0], hasta: reservas[reservas.length - 1][0] },
+    datos: {
+      evolucion,
+      resumen: {
+        reservas_actual_musd: Math.round(ultima),
+        reservas_inicio_musd: Math.round(primera),
+        variacion_musd: variacion,
+        variacion_pct: variacionPct,
+        maximo_musd: Math.round(maxVal),
+        minimo_musd: Math.round(minVal),
+        dias_analizados: reservas.length,
+      },
+    },
+    conclusion,
+    confianza: reservas.length >= 30 ? "alta" : "media",
+    fuentes: ["BCRA — Reservas Internacionales"],
+  };
+}
+
 // --- Public API ---
 
 export async function analisisEconomico(input: AnalisisInput): Promise<AnalisisResult> {
@@ -259,11 +419,17 @@ export async function analisisEconomico(input: AnalisisInput): Promise<AnalisisR
       return analizarPoderAdquisitivo(meses);
     case "brecha_cambiaria":
       return analizarBrechaCambiaria(meses);
+    case "inflacion_tendencia":
+      return analizarInflacionTendencia(meses);
+    case "reservas_tendencia":
+      return analizarReservasTendencia(meses);
     default:
       throw new Error(
         `Análisis no reconocido: '${mode}'. Opciones:\n` +
         `  - poder_adquisitivo: evolución del salario real vs inflación (IPC vs salarios INDEC)\n` +
-        `  - brecha_cambiaria: spread blue/oficial/MEP histórico con tendencia`
+        `  - brecha_cambiaria: spread blue/oficial/MEP histórico con tendencia\n` +
+        `  - inflacion_tendencia: evolución mensual del IPC con tasa anualizada\n` +
+        `  - reservas_tendencia: evolución de reservas internacionales BCRA con variación`
       );
   }
 }
