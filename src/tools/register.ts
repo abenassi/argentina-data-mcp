@@ -51,6 +51,7 @@ function shouldRegister(toolName: string, role: ApiKeyRole): boolean {
 // Shared freshness enum used across all tools
 const freshnessSchema = z.enum(["current", "stale", "unknown"]).describe("Data freshness indicator: current (recently updated), stale (outdated), unknown");
 
+
 // --- Output Schemas ---
 
 const dolarCotizacionesOutput = {
@@ -258,6 +259,7 @@ function errorResult(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return {
     content: [{ type: "text" as const, text: `Error: ${message}` }],
+    structuredContent: { error: message } as Record<string, unknown>,
     isError: true,
   };
 }
