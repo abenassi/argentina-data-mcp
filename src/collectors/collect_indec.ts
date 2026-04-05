@@ -28,7 +28,9 @@ export async function collectIndec(): Promise<CollectorResult> {
   for (const serie of SERIES) {
     try {
       const url = `https://apis.datos.gob.ar/series/api/series/?ids=${serie.id}&limit=24&sort=desc&metadata=full`;
-      const data = await fetchJSON<DatosGobResponse>(url);
+      const data = await fetchJSON<DatosGobResponse>(url, {
+        signal: AbortSignal.timeout(30000), // datos.gob.ar can be slow
+      });
 
       if (!data.data || data.data.length === 0) continue;
 
@@ -57,7 +59,7 @@ export async function collectIndec(): Promise<CollectorResult> {
 
   // Update freshness
   try {
-    const healthy = errors.length === 0;
+    const healthy = errors.length < SERIES.length / 3; // healthy if <33% fail (same as BCRA)
     await pool.query(
       `INSERT INTO data_freshness (source_name, last_successful_fetch, last_data_date, is_healthy, error_message, updated_at)
        VALUES ('indec', NOW(), CURRENT_DATE, $1, $2, NOW())
