@@ -6,7 +6,7 @@
 | API | URL | Status | Notas |
 |-----|-----|--------|-------|
 | DolarAPI.com | `GET https://dolarapi.com/v1/ambito/dolares` | ✅ | 7 tipos de dólar, sin auth, respuesta instantánea |
-| BCRA v4 | `GET https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/{id}` | ✅ | Funciona para 6 de 7 variables. Variable 6 (tasa_politica) devuelve 400 |
+| BCRA v4 | `GET https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/{id}` | ✅ | 10 variables activas. Variable 6 (tasa_politica) eliminada en v4 |
 | datos.gob.ar | `GET https://apis.datos.gob.ar/series/api/series/` | ✅ | 6 series activas verificadas con metadata=full |
 | InfoLeg dump | `GET https://datos.jus.gob.ar/.../base-infoleg-normativa-nacional.zip` | ✅ | ZIP de 46.7MB, 423,338 normas importadas a PostgreSQL |
 | Boletín Oficial | `GET https://www.boletinoficial.gob.ar/api/search/normas` | ❌ | HTTP 302 redirect a /error/show. API bloqueada para requests no-browser |
@@ -26,7 +26,7 @@
 | Tool | Status | Lee de | Notas |
 |------|--------|--------|-------|
 | dolar_cotizaciones | ✅ | PostgreSQL / API fallback | 7 cotizaciones (oficial, blue, CCL, cripto, tarjeta, mayorista, bolsa) |
-| bcra_tipo_cambio | ✅ | PostgreSQL / API fallback | v4.0 API, 7 variables configuradas |
+| bcra_tipo_cambio | ✅ | PostgreSQL / API fallback | v4.0 API, 10 variables configuradas |
 | infoleg_search | ✅ | PostgreSQL FTS | 418,736 normas, full-text search en español |
 | afip_cuit_lookup | ⚠️ | Cache + API fallback | API caída, funciona solo con cache preexistente |
 | indec_stats | ✅ | PostgreSQL / API fallback | 6 indicadores con freshness metadata |
@@ -68,7 +68,7 @@ Row counts:
 ## Blockers encontrados
 1. **AFIP CUIT API**: Todas las APIs públicas conocidas devuelven 404. tangofactura eliminada, AFIP SOA no responde. No hay forma de consultar CUITs sin credenciales especiales.
 2. **Boletín Oficial API**: Devuelve 302 redirect a página de error. Requiere sesión de browser o cookies especiales. No hay dataset alternativo encontrado en datos.gob.ar.
-3. **BCRA variable 6 (tasa_politica)**: Devuelve HTTP 400 en v4.0. Las otras 6 variables funcionan correctamente.
+3. **BCRA variable 6 (tasa_politica)**: ~~Devuelve HTTP 400 en v4.0~~ — **RESUELTO**: variable eliminada del mapa, no existe en BCRA v4. Se agregaron 4 nuevas variables (inflación, base/circulación monetaria, ICL), total 10.
 
 ## Decisiones tomadas
 1. **InfoLeg CSV en vez de API REST**: La API REST de InfoLeg es inestable. Descargué el dump CSV completo (46.7MB, 423K normas) e importé a PostgreSQL con full-text search en español. Mucho más confiable y rápido.
@@ -83,6 +83,6 @@ Row counts:
 ## Preguntas para mí
 1. ¿Conocés alguna API pública de AFIP/ARCA que funcione para consultar CUITs? La de tangofactura murió y la oficial requiere certificados digitales.
 2. ¿Querés que investigue web scraping del Boletín Oficial como alternativa?
-3. ¿La variable `tasa_politica` (BCRA variable 6) la sacamos del mapa de variables o buscamos un ID alternativo en v4?
+3. ~~¿La variable `tasa_politica` (BCRA variable 6) la sacamos del mapa de variables o buscamos un ID alternativo en v4?~~ **RESUELTO**: eliminada, no existe en v4.
 4. ¿Querés que configure el MCP server en tu claude_desktop_config.json o settings.json para que los tools estén disponibles desde Claude?
 5. La serie de Salarios tiene `is_updated: False` — ¿querés que busque una serie alternativa o la dejamos?
