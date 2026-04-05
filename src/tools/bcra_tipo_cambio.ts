@@ -55,7 +55,13 @@ export async function bcraTipoCambio(input: BcraTipoCambioInput): Promise<BcraTi
 
   if (!idVariable) {
     const disponibles = Object.keys(VARIABLES_CONOCIDAS).join(", ");
-    throw new Error(`Variable "${variableName}" no reconocida. Disponibles: ${disponibles}`);
+    return {
+      datos: [],
+      fuente: "BCRA - Principales variables",
+      fuente_url: "https://www.bcra.gob.ar/PublicacionesEstadisticas/Principales_variables.asp",
+      actualizado_al: new Date().toISOString().split("T")[0],
+      freshness: "unknown",
+    };
   }
 
   const hoy = new Date();

@@ -91,4 +91,45 @@ describe("indec_stats", () => {
     const result = await indecStats({ indicador: "IPC" });
     expect(result.indicador).toBe("ipc");
   });
+
+  it("devuelve serie temporal con ultimos > 1", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockResponse({
+        data: [
+          ["2025-06-01", 380.0],
+          ["2025-05-01", 370.0],
+          ["2025-04-01", 360.0],
+          ["2025-03-01", 350.0],
+        ],
+        count: 4,
+        meta: [
+          { frequency: "month" },
+          { field: { id: "148.3_INIVELNAL_DICI_M_26", time_index_end: "2025-06-01", is_updated: "True" } },
+        ],
+      })
+    );
+    const result = await indecStats({ indicador: "ipc", ultimos: 4 });
+    expect(result.valor).toBe(380.0);
+    expect(result.datos).toBeDefined();
+    expect(result.datos).toHaveLength(4);
+    // Chronological order (oldest first)
+    expect(result.datos![0].fecha).toBe("2025-03-01");
+    expect(result.datos![3].fecha).toBe("2025-06-01");
+    expect(result.datos![3].valor).toBe(380.0);
+  });
+
+  it("no incluye datos cuando ultimos = 1 (default)", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockResponse({
+        data: [["2025-06-01", 380.0], ["2025-05-01", 370.0]],
+        count: 2,
+        meta: [
+          { frequency: "month" },
+          { field: { id: "test", time_index_end: "2025-06-01", is_updated: "True" } },
+        ],
+      })
+    );
+    const result = await indecStats({ indicador: "ipc" });
+    expect(result.datos).toBeUndefined();
+  });
 });

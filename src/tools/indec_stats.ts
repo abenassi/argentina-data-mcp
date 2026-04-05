@@ -33,6 +33,7 @@ const INDICADORES: Record<string, { serieId: string; descripcion: string }> = {
 export interface IndecStatsInput {
   indicador: string;
   periodo?: string;
+  ultimos?: number;
 }
 
 export interface IndecStatsResult {
@@ -46,6 +47,7 @@ export interface IndecStatsResult {
   fuente: string;
   fuente_url: string;
   freshness: "current" | "stale" | "unknown";
+  datos?: Array<{ fecha: string; valor: number }>;
 }
 
 export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResult> {
@@ -59,13 +61,16 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
     throw new Error(`Indicador "${input.indicador}" no reconocido. Disponibles:\n  ${disponibles}`);
   }
 
+  const ultimos = Math.min(Math.max(input.ultimos || 1, 1), 24);
+  const dbLimit = Math.max(2, ultimos); // Always fetch at least 2 for MoM variation
+
   // Try PostgreSQL first
   try {
     const dbResult = await pool.query(
       `SELECT valor, fecha, is_updated, metadata FROM indec_series
        WHERE serie_id = $1
-       ORDER BY fecha DESC LIMIT 2`,
-      [indicador.serieId]
+       ORDER BY fecha DESC LIMIT $2`,
+      [indicador.serieId, dbLimit]
     );
     if (dbResult.rows.length > 0) {
       const latest = dbResult.rows[0];
@@ -75,7 +80,7 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
         : undefined;
       const fechaStr = latest.fecha.toISOString().split("T")[0];
       const ageMonths = (Date.now() - new Date(fechaStr).getTime()) / (30 * 24 * 3600000);
-      return {
+      const result: IndecStatsResult = {
         indicador: indicadorKey,
         descripcion: indicador.descripcion,
         valor: Number(latest.valor),
@@ -87,6 +92,12 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
         fuente_url: "https://datos.gob.ar/series/api/",
         freshness: ageMonths < 3 ? "current" : "stale",
       };
+      if (ultimos > 1) {
+        result.datos = dbResult.rows.slice(0, ultimos)
+          .map((r: any) => ({ fecha: r.fecha.toISOString().split("T")[0], valor: Number(r.valor) }))
+          .reverse(); // chronological order (oldest first)
+      }
+      return result;
     }
   } catch {
     // DB not available, fall through to API
@@ -95,7 +106,7 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
   // Fallback: direct API call
   const params = new URLSearchParams({
     ids: indicador.serieId,
-    limit: "2",
+    limit: String(dbLimit),
     sort: "desc",
     metadata: "full",
   });
@@ -131,7 +142,7 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
   const timeIndexEnd = fieldMeta?.time_index_end || latest[0];
   const isUpdated = fieldMeta?.is_updated !== "False";
 
-  return {
+  const result: IndecStatsResult = {
     indicador: indicadorKey,
     descripcion: indicador.descripcion,
     valor: latestValor,
@@ -143,4 +154,11 @@ export async function indecStats(input: IndecStatsInput): Promise<IndecStatsResu
     fuente_url: "https://datos.gob.ar/series/api/",
     freshness: isUpdated ? "current" : "stale",
   };
+  if (ultimos > 1) {
+    result.datos = data.data.slice(0, ultimos)
+      .filter((d): d is [string, number] => d[1] !== null)
+      .map(d => ({ fecha: d[0], valor: d[1] }))
+      .reverse(); // chronological order
+  }
+  return result;
 }

@@ -123,6 +123,10 @@ const indecStatsOutput = {
   fuente: z.string().describe("Original data source name"),
   fuente_url: z.string().describe("URL of the original data source"),
   freshness: freshnessSchema,
+  datos: z.array(z.object({
+    fecha: z.string().describe("Period date (YYYY-MM-DD)"),
+    valor: z.number().describe("Value for this period"),
+  })).optional().describe("Time series data (only when ultimos > 1). Chronological order, oldest first."),
 };
 
 
@@ -259,7 +263,6 @@ function errorResult(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return {
     content: [{ type: "text" as const, text: `Error: ${message}` }],
-    structuredContent: { error: message } as Record<string, unknown>,
     isError: true,
   };
 }
@@ -367,10 +370,11 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
 
   if (shouldRegister("indec_stats", role))
   server.registerTool("indec_stats", {
-    description: "Consulta indicadores estadísticos del INDEC. Indicadores disponibles: ipc (Precios al Consumidor), emae (Actividad Económica), ipc_nucleo, salarios, construccion, industria.",
+    description: "Consulta indicadores estadísticos del INDEC. Indicadores disponibles: ipc (Precios al Consumidor), emae (Actividad Económica), ipc_nucleo, salarios, construccion, industria. Usar 'ultimos' para obtener serie temporal (ej: ultimos=12 para último año).",
     inputSchema: {
       indicador: z.string().default("ipc").describe("Indicador a consultar: ipc, emae, ipc_nucleo, salarios, construccion, industria"),
       periodo: z.string().optional().describe("Período de inicio (YYYY-MM-DD). Default: último disponible"),
+      ultimos: z.number().optional().describe("Cantidad de períodos a devolver (1-24). Default: 1 (solo último valor). Usar >1 para obtener serie temporal."),
     },
     outputSchema: indecStatsOutput,
     _meta: toolMeta("indec_stats", { executeUsd: "0.001" }),

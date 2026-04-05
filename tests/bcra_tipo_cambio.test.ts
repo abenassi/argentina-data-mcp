@@ -85,8 +85,10 @@ describe("bcra_tipo_cambio", () => {
     expect(calledUrl).toContain("hasta=2025-01-10");
   });
 
-  it("lanza error con variable desconocida", async () => {
-    await expect(bcraTipoCambio({ variable: "bitcoin" })).rejects.toThrow("no reconocida");
+  it("retorna resultado vacío con variable desconocida", async () => {
+    const result = await bcraTipoCambio({ variable: "bitcoin" });
+    expect(result.datos).toEqual([]);
+    expect(result.freshness).toBe("unknown");
   });
 
   it("retorna datos vacíos si no hay resultados", async () => {
