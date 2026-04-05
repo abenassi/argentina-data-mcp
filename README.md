@@ -45,12 +45,6 @@ Agregá este MCP server como conector HTTP en tu cuenta de Claude:
 | `list_bcra_variables` | Lista todas las variables BCRA con unidades y descripciones | ✅ Stable |
 | `list_indec_indicadores` | Lista los indicadores INDEC disponibles con IDs de serie | ✅ Stable |
 
-### Análisis inteligente
-
-| Tool | Descripción | Estado |
-|------|-------------|--------|
-| `analisis_economico` | Análisis económico combinando múltiples fuentes: poder adquisitivo, brecha cambiaria, tendencia de inflación, tendencia de reservas | 🧪 Alpha |
-
 ## Ejemplos de uso
 
 ### Cotizaciones del dólar

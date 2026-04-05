@@ -10,7 +10,7 @@ import { dataHealth } from "./data_health.js";
 import { dolarHistorico } from "./dolar_historico.js";
 import { listBcraVariables, listIndecIndicadores, listDolarTipos } from "./discovery.js";
 import { legislacionTributaria } from "./legislacion_tributaria.js";
-import { analisisEconomico } from "./analisis_economico.js";
+
 import { feriadosNacionales } from "./feriados_nacionales.js";
 import { afipSearchByName } from "./afip_search_by_name.js";
 import { logToolCall } from "../request_log.js";
@@ -38,7 +38,7 @@ const TOOL_LIFECYCLE: Record<string, ToolLifecycle> = {
   list_indec_indicadores: "stable",
   list_dolar_tipos: "stable",
   legislacion_tributaria: "stable",
-  analisis_economico: "alpha",
+
   feriados_nacionales: "stable",
   afip_search_by_name: "stable",
 };
@@ -198,20 +198,6 @@ const legislacionTributariaOutput = {
   norma_fuente: z.string().describe("Source law/regulation"),
   actualizado_al: z.string().describe("Date of last data update (YYYY-MM-DD)"),
   datos: z.object({}).passthrough().describe("Structured tax data — schema varies by impuesto type"),
-};
-
-// --- Intelligence tool output schema ---
-
-const analisisEconomicoOutput = {
-  analisis: z.string().describe("Analysis type: poder_adquisitivo, brecha_cambiaria"),
-  periodo: z.object({
-    desde: z.string().describe("Start date (YYYY-MM-DD)"),
-    hasta: z.string().describe("End date (YYYY-MM-DD)"),
-  }).describe("Analysis time period"),
-  datos: z.object({}).passthrough().describe("Detailed analysis data with evolution and summary"),
-  conclusion: z.string().describe("Human-readable conclusion in Spanish"),
-  confianza: z.enum(["alta", "media", "baja"]).describe("Confidence level based on data quality"),
-  fuentes: z.array(z.string()).describe("Data sources used for the analysis"),
 };
 
 // --- Feriados output schema ---
@@ -459,23 +445,6 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   }, withLog("legislacion_tributaria", async (input) => {
     try {
       return structuredResult(legislacionTributaria(input));
-    } catch (error) {
-      return errorResult(error);
-    }
-  }));
-
-  if (shouldRegister("analisis_economico", role))
-  server.registerTool("analisis_economico", {
-    description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación), brecha_cambiaria (spread blue/oficial/MEP), inflacion_tendencia (IPC mensual con tasa anualizada), reservas_tendencia (reservas internacionales BCRA). Devuelve análisis con conclusión.",
-    inputSchema: {
-      analisis: z.string().default("brecha_cambiaria").describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria, inflacion_tendencia, reservas_tendencia"),
-      meses: z.number().optional().describe("Cantidad de meses a analizar (default: 12, max: 24)"),
-    },
-    outputSchema: analisisEconomicoOutput,
-    _meta: toolMeta("analisis_economico", { executeUsd: "0.003", latencyClass: "fast" }),
-  }, withLog("analisis_economico", async (input) => {
-    try {
-      return structuredResult(await analisisEconomico(input));
     } catch (error) {
       return errorResult(error);
     }
