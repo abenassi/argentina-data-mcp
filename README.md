@@ -1,6 +1,6 @@
 # Argentina Data MCP
 
-MCP server que expone datos argentinos en tiempo real para agentes de IA: cotizaciones del dólar, variables del BCRA, estadísticas del INDEC, legislación de InfoLeg, y más.
+MCP server que expone datos argentinos en tiempo real para agentes de IA: cotizaciones del dólar, variables del BCRA, estadísticas del INDEC, legislación de InfoLeg, datos de AFIP, legislación tributaria, feriados nacionales, y más.
 
 ## Conectar desde Claude.ai
 
@@ -12,16 +12,44 @@ Agregá este MCP server como conector HTTP en tu cuenta de Claude:
 
 ## Tools disponibles
 
+### Datos financieros
+
 | Tool | Descripción | Estado |
 |------|-------------|--------|
-| `dolar_cotizaciones` | Cotizaciones actuales del dólar (oficial, blue, MEP, CCL, cripto, tarjeta, mayorista) | ✅ |
-| `dolar_historico` | Evolución histórica del dólar (7 tipos, desde 2024). Fuente: Ámbito Financiero | ✅ |
-| `bcra_tipo_cambio` | Variables monetarias del BCRA: dólar oficial/mayorista, reservas, BADLAR, inflación, base monetaria, ICL | ✅ |
-| `indec_stats` | Indicadores INDEC: IPC, EMAE, salarios, construcción (ISAC), industria (IPI) | ✅ |
-| `infoleg_search` | Búsqueda de legislación argentina (420K+ leyes, decretos, resoluciones) con full-text search | ✅ |
-| `afip_cuit_lookup` | Consulta de CUIT/CUIL en AFIP — desactivada, APIs públicas discontinuadas | ❌ |
-| `boletin_oficial_search` | Búsqueda en el Boletín Oficial (decretos, resoluciones, disposiciones) | ✅ |
-| `data_health` | Estado de salud de todas las fuentes de datos | ✅ |
+| `dolar_cotizaciones` | Cotizaciones actuales del dólar (oficial, blue, MEP, CCL, cripto, tarjeta, mayorista) | ✅ Stable |
+| `dolar_historico` | Evolución histórica del dólar (7 tipos, desde 2024). Fuente: Ámbito Financiero | ✅ Stable |
+| `bcra_tipo_cambio` | Variables monetarias del BCRA: dólar oficial/mayorista, reservas, BADLAR, TM20, inflación mensual/interanual, base monetaria, circulación monetaria, ICL | ✅ Stable |
+| `indec_stats` | Indicadores INDEC: IPC, IPC núcleo, EMAE, salarios, construcción (ISAC), industria (IPI) | ✅ Stable |
+
+### Legislación y datos fiscales
+
+| Tool | Descripción | Estado |
+|------|-------------|--------|
+| `infoleg_search` | Búsqueda full-text en 420K+ normas de InfoLeg (leyes, decretos, resoluciones) | ✅ Stable |
+| `boletin_oficial_search` | Búsqueda en el Boletín Oficial (decretos, resoluciones, disposiciones por sección y fecha) | ✅ Stable |
+| `legislacion_tributaria` | Datos estructurados de legislación tributaria: monotributo (categorías A-K), ganancias (deducciones, escalas), IVA (alícuotas) | ✅ Stable |
+| `afip_search_by_name` | Búsqueda en el padrón de AFIP (~6M contribuyentes) por nombre o razón social. Devuelve CUIT, estado, categorías impositivas | ✅ Stable |
+
+### Utilidades
+
+| Tool | Descripción | Estado |
+|------|-------------|--------|
+| `feriados_nacionales` | Feriados nacionales por año/mes, incluyendo inamovibles, trasladables y puentes. Calcula días hábiles | ✅ Stable |
+| `data_health` | Estado de salud de todas las fuentes de datos con última actualización y smoke tests | ✅ Stable |
+
+### Discovery
+
+| Tool | Descripción | Estado |
+|------|-------------|--------|
+| `list_dolar_tipos` | Lista los tipos de dólar disponibles y qué tools los soportan | ✅ Stable |
+| `list_bcra_variables` | Lista todas las variables BCRA con unidades y descripciones | ✅ Stable |
+| `list_indec_indicadores` | Lista los indicadores INDEC disponibles con IDs de serie | ✅ Stable |
+
+### Análisis inteligente
+
+| Tool | Descripción | Estado |
+|------|-------------|--------|
+| `analisis_economico` | Análisis económico combinando múltiples fuentes: poder adquisitivo, brecha cambiaria, tendencia de inflación, tendencia de reservas | 🧪 Alpha |
 
 ## Ejemplos de uso
 
@@ -33,12 +61,12 @@ Usa `dolar_cotizaciones` — devuelve las 7 cotizaciones actuales con compra, ve
 ### Evolución del dólar blue
 > "Mostrame cómo evolucionó el dólar blue en los últimos 6 meses"
 
-Usa `dolar_historico` con `tipo: "blue"` y `fecha_desde: "2025-10-01"`.
+Usa `dolar_historico` con `tipo: "blue"` y `fecha_desde`.
 
 ### Variables del BCRA
 > "¿Cuánto crecieron las reservas del BCRA en el último año?"
 
-Usa `bcra_tipo_cambio` con `variable: "reservas"` y `fecha_desde: "2025-04-01"`.
+Usa `bcra_tipo_cambio` con `variable: "reservas"` y `fecha_desde`.
 
 ### Inflación
 > "¿Cuál fue la inflación de febrero 2026?"
@@ -49,6 +77,21 @@ Usa `indec_stats` con `indicador: "ipc"`.
 > "Buscá leyes sobre monotributo"
 
 Usa `infoleg_search` con `query: "monotributo"`. Los resultados priorizan normativa reciente.
+
+### Datos tributarios
+> "¿Cuáles son las categorías del monotributo?"
+
+Usa `legislacion_tributaria` con `tipo: "monotributo"` — devuelve categorías A-K con límites y cuotas.
+
+### Búsqueda de contribuyentes
+> "Buscá empresas con el nombre Mercado Libre en AFIP"
+
+Usa `afip_search_by_name` con `nombre: "Mercado Libre"` — busca por similitud en el padrón.
+
+### Feriados
+> "¿Cuántos días hábiles tiene abril 2026?"
+
+Usa `feriados_nacionales` con `year: 2026` y `month: 4`.
 
 ### Diagnóstico
 > "¿Están funcionando todas las fuentes de datos?"
@@ -127,6 +170,8 @@ npm run start:http
 | [BCRA API v4](https://api.bcra.gob.ar) | Variables monetarias (10 variables, 2+ años) | Cada hora |
 | [datos.gob.ar](https://apis.datos.gob.ar/series/) | Series INDEC (IPC, EMAE, salarios, etc.) | Diario |
 | [InfoLeg](https://datos.jus.gob.ar) | Normativa nacional (420K+ normas) | Dump CSV |
+| [Boletín Oficial](https://www.boletinoficial.gob.ar) | Publicaciones oficiales (decretos, resoluciones) | Diario (L-V) |
+| [AFIP Padrón](https://www.afip.gob.ar) | Padrón de contribuyentes (~6M registros) | Periódico |
 
 ## Tests
 
@@ -137,4 +182,6 @@ npm run test:integration # Solo integration tests (requiere PostgreSQL)
 
 ## License
 
-MIT
+PolyForm Noncommercial 1.0.0 — ver [LICENSE](LICENSE).
+
+Uso personal, educativo y de investigación permitido. Uso comercial requiere autorización previa del autor.
