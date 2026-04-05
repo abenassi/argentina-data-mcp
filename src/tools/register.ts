@@ -514,4 +514,51 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
       return errorResult(error);
     }
   }));
+
+  // --- Post-process: strip $schema and additionalProperties from outputSchema ---
+  // The SDK's Zod-to-JSON-Schema conversion adds "$schema" and "additionalProperties: false"
+  // which cause issues with the Context Protocol marketplace. We patch the listTools response
+  // to produce clean JSON Schema objects matching the Blocknative pattern.
+  patchListToolsOutputSchemas(server);
+}
+
+/**
+ * Recursively strips "$schema" and "additionalProperties" from a JSON Schema object.
+ * This ensures outputSchemas match the clean format expected by the Context Protocol marketplace.
+ */
+function stripSchemaFields(obj: unknown): unknown {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(stripSchemaFields);
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if (key === "$schema" || key === "additionalProperties") continue;
+    cleaned[key] = stripSchemaFields(value);
+  }
+  return cleaned;
+}
+
+/**
+ * Patches the low-level listTools handler to strip "$schema" and "additionalProperties"
+ * from all outputSchema objects in the response.
+ */
+function patchListToolsOutputSchemas(mcpServer: McpServer): void {
+  const lowLevel = mcpServer.server as unknown as {
+    _requestHandlers: Map<string, (request: unknown, extra: unknown) => Promise<unknown>>;
+  };
+  const originalHandler = lowLevel._requestHandlers.get("tools/list");
+  if (!originalHandler) return;
+
+  lowLevel._requestHandlers.set("tools/list", async (request, extra) => {
+    const result = await originalHandler(request, extra) as {
+      tools: Array<{ outputSchema?: Record<string, unknown>; [k: string]: unknown }>;
+    };
+    if (result?.tools) {
+      for (const tool of result.tools) {
+        if (tool.outputSchema) {
+          tool.outputSchema = stripSchemaFields(tool.outputSchema) as Record<string, unknown>;
+        }
+      }
+    }
+    return result;
+  });
 }
