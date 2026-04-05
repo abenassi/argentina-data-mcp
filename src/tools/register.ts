@@ -315,7 +315,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("bcra_tipo_cambio", {
     description: "Consulta cotizaciones del dólar y variables monetarias del BCRA. Variables: dolar_oficial, dolar_mayorista, reservas, badlar, tm20, inflacion_mensual, inflacion_interanual, base_monetaria, circulacion_monetaria, icl.",
     inputSchema: {
-      variable: z.string().optional().describe("Variable a consultar (default: dolar_oficial)"),
+      variable: z.string().default("dolar_oficial").describe("Variable a consultar: dolar_oficial, dolar_mayorista, reservas, badlar, tm20, inflacion_mensual, inflacion_interanual, base_monetaria, circulacion_monetaria, icl"),
       fecha_desde: z.string().optional().describe("Fecha desde (YYYY-MM-DD). Default: 7 días atrás"),
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
@@ -333,7 +333,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("infoleg_search", {
     description: "Busca legislación argentina (leyes, decretos, resoluciones) en la base de InfoLeg del Ministerio de Justicia. Requiere que el dump CSV haya sido importado.",
     inputSchema: {
-      query: z.string().describe("Texto a buscar en la legislación"),
+      query: z.string().default("impuesto a las ganancias").describe("Texto a buscar en la legislación"),
       tipo: z.string().optional().describe("Tipo de norma: ley, decreto, resolución"),
       limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
     },
@@ -351,7 +351,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("boletin_oficial_search", {
     description: "Busca publicaciones en el Boletín Oficial de la República Argentina. Encuentra decretos, resoluciones, disposiciones y avisos por texto. Datos desde el dump diario del boletinoficial.gob.ar.",
     inputSchema: {
-      query: z.string().describe("Texto a buscar (organismo, tipo de norma, tema)"),
+      query: z.string().default("decreto").describe("Texto a buscar (organismo, tipo de norma, tema)"),
       seccion: z.string().optional().describe("Filtrar por sección: primera, segunda, tercera"),
       fecha: z.string().optional().describe("Filtrar por fecha de publicación (YYYY-MM-DD)"),
     },
@@ -369,7 +369,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("indec_stats", {
     description: "Consulta indicadores estadísticos del INDEC. Indicadores disponibles: ipc (Precios al Consumidor), emae (Actividad Económica), ipc_nucleo, salarios, construccion, industria.",
     inputSchema: {
-      indicador: z.string().describe("Indicador a consultar: ipc, emae, ipc_nucleo, salarios, construccion, industria"),
+      indicador: z.string().default("ipc").describe("Indicador a consultar: ipc, emae, ipc_nucleo, salarios, construccion, industria"),
       periodo: z.string().optional().describe("Período de inicio (YYYY-MM-DD). Default: último disponible"),
     },
     outputSchema: indecStatsOutput,
@@ -386,7 +386,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("dolar_historico", {
     description: "Consulta la evolución histórica del dólar en Argentina. Tipos: blue, oficial, mep, ccl, mayorista, cripto, tarjeta. Datos desde 2024. Fuente: Ámbito Financiero.",
     inputSchema: {
-      tipo: z.string().optional().describe("Tipo de dólar: blue, oficial, mep, ccl, mayorista, cripto, tarjeta (default: blue)"),
+      tipo: z.string().default("blue").describe("Tipo de dólar: blue, oficial, mep, ccl, mayorista, cripto, tarjeta"),
       fecha_desde: z.string().optional().describe("Fecha desde (YYYY-MM-DD). Default: 3 meses atrás"),
       fecha_hasta: z.string().optional().describe("Fecha hasta (YYYY-MM-DD). Default: hoy"),
     },
@@ -448,7 +448,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("legislacion_tributaria", {
     description: "Consulta datos estructurados de legislación tributaria argentina: monotributo (categorías A-K, cuotas, topes), ganancias (deducciones, escala de alícuotas), IVA (alícuotas). Datos pre-computados y actualizados.",
     inputSchema: {
-      impuesto: z.string().optional().describe("Impuesto a consultar: monotributo, ganancias, iva (default: monotributo)"),
+      impuesto: z.string().default("monotributo").describe("Impuesto a consultar: monotributo, ganancias, iva"),
     },
     outputSchema: legislacionTributariaOutput,
     _meta: toolMeta("legislacion_tributaria", { executeUsd: "0.001" }),
@@ -464,7 +464,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("analisis_economico", {
     description: "Análisis económico inteligente que combina múltiples fuentes de datos. Modos: poder_adquisitivo (salario real vs inflación, combina IPC + salarios INDEC), brecha_cambiaria (spread blue/oficial/MEP histórico con tendencia). Devuelve análisis con conclusión, no solo datos crudos.",
     inputSchema: {
-      analisis: z.string().describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria"),
+      analisis: z.string().default("brecha_cambiaria").describe("Tipo de análisis: poder_adquisitivo, brecha_cambiaria"),
       meses: z.number().optional().describe("Cantidad de meses a analizar (default: 12, max: 24)"),
     },
     outputSchema: analisisEconomicoOutput,
@@ -498,7 +498,7 @@ export function registerTools(server: McpServer, role: ApiKeyRole = "user"): voi
   server.registerTool("afip_search_by_name", {
     description: "Busca contribuyentes en el padrón de ARCA (ex-AFIP) por nombre o denominación. Devuelve CUIT, estado fiscal, IVA, Ganancias y Monotributo. Útil cuando se conoce el nombre pero no el CUIT. Base: ~6 millones de contribuyentes.",
     inputSchema: {
-      nombre: z.string().describe("Nombre o denominación a buscar (mínimo 3 caracteres)"),
+      nombre: z.string().default("Mercado Libre").describe("Nombre o denominación a buscar (mínimo 3 caracteres)"),
       limit: z.number().optional().describe("Cantidad máxima de resultados (default: 10, max: 50)"),
     },
     outputSchema: afipSearchByNameOutput,
