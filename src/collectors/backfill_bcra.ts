@@ -17,8 +17,12 @@ const VARIABLES: { id: number; nombre: string }[] = [
   { id: 5, nombre: "dolar_mayorista" },
   { id: 1, nombre: "reservas" },
   { id: 7, nombre: "badlar" },
+  { id: 8, nombre: "tm20" },
   { id: 27, nombre: "inflacion_mensual" },
+  { id: 28, nombre: "inflacion_interanual" },
   { id: 15, nombre: "base_monetaria" },
+  { id: 16, nombre: "circulacion_monetaria" },
+  { id: 40, nombre: "icl" },
 ];
 
 async function backfillVariable(variable: { id: number; nombre: string }, desde: string, hasta: string): Promise<number> {
